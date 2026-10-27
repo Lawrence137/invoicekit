@@ -1,0 +1,323 @@
+"use client";
+
+import type { InvoiceDraft, Item } from "@/types/invoice";
+
+type InvoiceEditorProps = {
+  draft: InvoiceDraft;
+  storageReady: boolean;
+  storageAvailable: boolean;
+  storageMessage: string;
+  onChange: <K extends keyof InvoiceDraft>(
+    field: K,
+    value: InvoiceDraft[K]
+  ) => void;
+  onItemChange: (
+    id: number,
+    field: keyof Item,
+    value: string | number
+  ) => void;
+  onAddItem: () => void;
+  onRemoveItem: (id: number) => void;
+  onSave: () => void;
+  onNewInvoice: () => void;
+  onDashboard: () => void;
+};
+
+const inputClass =
+  "mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+
+export default function InvoiceEditor({
+  draft,
+  storageReady,
+  storageAvailable,
+  storageMessage,
+  onChange,
+  onItemChange,
+  onAddItem,
+  onRemoveItem,
+  onSave,
+  onNewInvoice,
+  onDashboard,
+}: InvoiceEditorProps) {
+  return (
+    <section className="no-print space-y-6">
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!storageReady || !storageAvailable}
+          aria-label={`Save invoice ${draft.invoiceNumber}`}
+          className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Save Invoice
+        </button>
+        <button
+          type="button"
+          onClick={onNewInvoice}
+          disabled={!storageReady}
+          aria-label="Start a new invoice"
+          className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          New Invoice
+        </button>
+        <button
+          type="button"
+          onClick={onDashboard}
+          className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Back to dashboard
+        </button>
+      </div>
+
+      {storageMessage && (
+        <p
+          className={`text-sm ${storageAvailable ? "text-slate-500" : "text-amber-700"}`}
+          role="status"
+          aria-live="polite"
+        >
+          {storageMessage}
+        </p>
+      )}
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">Invoice details</h2>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-medium">
+            Your business
+            <input
+              value={draft.business}
+              onChange={(event) => onChange("business", event.target.value)}
+              className={inputClass}
+              placeholder="Your business name"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Business email
+            <input
+              type="email"
+              value={draft.businessEmail}
+              onChange={(event) =>
+                onChange("businessEmail", event.target.value)
+              }
+              className={inputClass}
+              placeholder="you@business.com"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Client name
+            <input
+              value={draft.client}
+              onChange={(event) => onChange("client", event.target.value)}
+              className={inputClass}
+              placeholder="Client name"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Client email
+            <input
+              type="email"
+              value={draft.clientEmail}
+              onChange={(event) => onChange("clientEmail", event.target.value)}
+              className={inputClass}
+              placeholder="client@example.com"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Invoice number
+            <input
+              value={draft.invoiceNumber}
+              onChange={(event) =>
+                onChange("invoiceNumber", event.target.value)
+              }
+              className={inputClass}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Currency
+            <select
+              value={draft.currency}
+              onChange={(event) => onChange("currency", event.target.value)}
+              className={`${inputClass} bg-white`}
+            >
+              <option value="KES">KES — Kenyan Shilling</option>
+              <option value="USD">USD — US Dollar</option>
+              <option value="EUR">EUR — Euro</option>
+              <option value="GBP">GBP — British Pound</option>
+            </select>
+          </label>
+
+          <label className="text-sm font-medium">
+            Issue date
+            <input
+              type="date"
+              value={draft.issueDate}
+              onChange={(event) => onChange("issueDate", event.target.value)}
+              className={inputClass}
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Due date
+            <input
+              type="date"
+              value={draft.dueDate}
+              onChange={(event) => onChange("dueDate", event.target.value)}
+              className={inputClass}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Line items</h2>
+          <button
+            type="button"
+            onClick={onAddItem}
+            className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+          >
+            + Add item
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-4">
+          {draft.items.map((item, index) => (
+            <div
+              key={item.id}
+              className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  Item {index + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveItem(item.id)}
+                  className="text-sm text-red-500 hover:text-red-700"
+                  aria-label={`Remove item ${index + 1}`}
+                >
+                  Remove
+                </button>
+              </div>
+
+              <label className="block text-xs font-medium text-slate-500">
+                Description
+                <input
+                  value={item.description}
+                  onChange={(event) =>
+                    onItemChange(item.id, "description", event.target.value)
+                  }
+                  placeholder="Description of service"
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-blue-500"
+                />
+              </label>
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <label className="text-xs font-medium text-slate-500">
+                  Quantity
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.quantity}
+                    onChange={(event) =>
+                      onItemChange(
+                        item.id,
+                        "quantity",
+                        Math.max(0, Number(event.target.value))
+                      )
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
+                  />
+                </label>
+                <label className="text-xs font-medium text-slate-500">
+                  Unit price
+                  <input
+                    type="number"
+                    min="0"
+                    value={item.price}
+                    onChange={(event) =>
+                      onItemChange(
+                        item.id,
+                        "price",
+                        Math.max(0, Number(event.target.value))
+                      )
+                    }
+                    className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900"
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+
+          {draft.items.length === 0 && (
+            <p className="rounded-lg bg-slate-50 p-5 text-center text-sm text-slate-500">
+              No items yet. Click Add item to get started.
+            </p>
+          )}
+        </div>
+
+        <label className="mt-5 block text-sm font-medium">
+          Tax rate (%)
+          <input
+            type="number"
+            min="0"
+            max="100"
+            value={draft.tax}
+            onChange={(event) =>
+              onChange(
+                "tax",
+                Math.min(100, Math.max(0, Number(event.target.value)))
+              )
+            }
+            className={inputClass}
+          />
+        </label>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">Additional information</h2>
+        <div className="mt-5 space-y-4">
+          <label className="block text-sm font-medium">
+            Payment instructions
+            <textarea
+              value={draft.paymentInstructions}
+              onChange={(event) =>
+                onChange("paymentInstructions", event.target.value)
+              }
+              rows={3}
+              className={inputClass}
+              placeholder="Bank transfer details or other payment instructions"
+            />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Payment terms (optional)
+            <textarea
+              value={draft.paymentTerms}
+              onChange={(event) => onChange("paymentTerms", event.target.value)}
+              rows={2}
+              className={inputClass}
+              placeholder="e.g. Payment due within 30 days"
+            />
+          </label>
+
+          <label className="block text-sm font-medium">
+            Invoice notes (optional)
+            <textarea
+              value={draft.notes}
+              onChange={(event) => onChange("notes", event.target.value)}
+              rows={3}
+              className={inputClass}
+              placeholder="Add any other information for your client"
+            />
+          </label>
+        </div>
+      </div>
+    </section>
+  );
+}
