@@ -356,71 +356,77 @@ export default function Home() {
     : invoiceTotal(draft);
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    <main
+      id="main-content"
+      className="min-h-screen bg-[#f8f9fc] text-slate-900"
+    >
+      <a
+        href="#main-content"
+        className="no-print sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-3 focus:font-semibold focus:text-slate-900 focus:shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+      >
+        Skip to main content
+      </a>
       <header className="no-print border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
+        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={showDashboard}
-            className="text-xl font-bold tracking-tight"
+            className="rounded-md text-xl font-bold tracking-tight focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
             aria-label="Go to invoice dashboard"
           >
             Invoice<span className="text-blue-600">Kit</span>
           </button>
           <nav
-            className="flex items-center gap-2 sm:gap-4"
-            aria-label="Main navigation"
+            className="flex items-center gap-2"
+            aria-label="Workspace actions"
           >
-            <button
-              type="button"
-              onClick={showDashboard}
-              aria-current={
-                currentView === "dashboard" ? "page" : undefined
-              }
-              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-                currentView === "dashboard"
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              Dashboard
-            </button>
-            <button
-              type="button"
-              onClick={startNewInvoice}
-              disabled={!storageReady}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
-            >
-              New invoice
-            </button>
+            {currentView === "editor" ? (
+              <button
+                type="button"
+                onClick={showDashboard}
+                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              >
+                Dashboard
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={startNewInvoice}
+                disabled={!storageReady}
+                className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                New invoice
+              </button>
+            )}
           </nav>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-5 py-8">
-        <div className="no-print mb-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <div className="no-print mb-6 sm:mb-7">
           {currentView === "dashboard" ? (
             <>
-              <p className="text-sm font-medium text-blue-600">
-                WORKSPACE / OVERVIEW
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                InvoiceKit / Workspace
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight">
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
                 Invoice dashboard
               </h1>
-              <p className="mt-2 text-slate-500">
-                Keep track of your invoices and what needs attention.
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                A clear view of what you’ve invoiced, what’s been paid, and
+                what needs your attention.
               </p>
             </>
           ) : (
             <>
-              <p className="text-sm font-medium text-blue-600">
-                WORKSPACE / INVOICES
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                InvoiceKit / Invoices
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight">
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
                 Create an invoice
               </h1>
-              <p className="mt-2 text-slate-500">
-                Add your details and preview your invoice in real time.
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                Add your details and preview the invoice as you work.
               </p>
             </>
           )}
@@ -472,7 +478,7 @@ export default function Home() {
           />
         </div>
 
-        <footer className="no-print py-8 text-center text-xs text-slate-400">
+        <footer className="no-print mt-8 border-t border-slate-200/80 py-6 text-center text-xs text-slate-400">
           InvoiceKit · Simple invoicing, done right.
         </footer>
       </div>
