@@ -32,7 +32,7 @@ textarea {
 
 @page {
   size: A4;
-  margin: 12mm;
+  margin: 14mm;
 }
 
 @media print {
@@ -44,6 +44,11 @@ textarea {
   }
 
   .no-print {
+    display: none !important;
+  }
+
+  [data-dashboard-view],
+  [data-view="dashboard"] .invoice-layout {
     display: none !important;
   }
 
@@ -63,6 +68,32 @@ textarea {
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    overflow: visible !important;
+    color: #0f172a !important;
+    background: white !important;
+  }
+
+  .invoice-items {
+    overflow: visible !important;
+  }
+
+  .invoice-items table {
+    min-width: 0 !important;
+  }
+
+  .invoice-template-modern thead tr {
+    background: white !important;
+    color: #0f172a !important;
+    border-bottom: 2px solid #334155 !important;
+  }
+
+  .invoice-template-modern .invoice-totals {
+    background: white !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  .invoice-template-classic thead tr {
+    border-color: #334155 !important;
   }
 
   button {
@@ -74,7 +105,16 @@ textarea {
     border-collapse: collapse;
   }
 
+  thead {
+    display: table-header-group;
+  }
+
   tr {
+    break-inside: avoid;
+  }
+
+  .invoice-totals,
+  .invoice-footer {
     break-inside: avoid;
   }
 }

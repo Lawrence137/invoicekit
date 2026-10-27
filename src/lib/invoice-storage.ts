@@ -46,6 +46,11 @@ export function readInvoices(): InvoiceReadResult {
       if (typeof invoice !== "object" || invoice === null) return false;
       return (
         !("payments" in invoice) ||
+        !("businessAddress" in invoice) ||
+        !("businessPhone" in invoice) ||
+        !("businessWebsite" in invoice) ||
+        !("businessTaxId" in invoice) ||
+        !("template" in invoice) ||
         invoices[index]?.status !== invoice.status
       );
     });

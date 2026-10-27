@@ -1,10 +1,13 @@
 "use client";
 
 import InvoicePayments from "@/components/invoices/InvoicePayments";
+import InvoiceCustomization from "@/components/invoices/InvoiceCustomization";
 import { formatCurrency, invoiceTotal } from "@/lib/invoice-utils";
 import type {
+  InvoiceBrandingSettings,
   InvoiceDisplayStatus,
   InvoiceDraft,
+  InvoiceTemplate,
   Item,
   Payment,
   PaymentDraft,
@@ -15,6 +18,10 @@ type InvoiceEditorProps = {
   status: InvoiceDisplayStatus;
   payments: Payment[];
   balance: number;
+  brandingSettings: InvoiceBrandingSettings;
+  brandingReady: boolean;
+  brandingAvailable: boolean;
+  brandingMessage: string;
   storageReady: boolean;
   storageAvailable: boolean;
   storageMessage: string;
@@ -30,6 +37,9 @@ type InvoiceEditorProps = {
   onAddItem: () => void;
   onRemoveItem: (id: number) => void;
   onSave: () => void;
+  onBrandingChange: (
+    settings: InvoiceBrandingSettings
+  ) => string | null;
   onMarkSent: () => void;
   onSavePayment: (payment: PaymentDraft, paymentId?: string) => string | null;
   onDeletePayment: (payment: Payment) => void;
@@ -45,6 +55,10 @@ export default function InvoiceEditor({
   status,
   payments,
   balance,
+  brandingSettings,
+  brandingReady,
+  brandingAvailable,
+  brandingMessage,
   storageReady,
   storageAvailable,
   storageMessage,
@@ -53,6 +67,7 @@ export default function InvoiceEditor({
   onAddItem,
   onRemoveItem,
   onSave,
+  onBrandingChange,
   onMarkSent,
   onSavePayment,
   onDeletePayment,
@@ -159,6 +174,57 @@ export default function InvoiceEditor({
           </label>
 
           <label className="text-sm font-medium">
+            Business address (optional)
+            <textarea
+              value={draft.businessAddress}
+              onChange={(event) =>
+                onChange("businessAddress", event.target.value)
+              }
+              rows={2}
+              className={inputClass}
+              placeholder="Street address, city, postal code…"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Business phone (optional)
+            <input
+              type="tel"
+              value={draft.businessPhone}
+              onChange={(event) =>
+                onChange("businessPhone", event.target.value)
+              }
+              className={inputClass}
+              placeholder="+1 555 0100…"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Website (optional)
+            <input
+              type="url"
+              value={draft.businessWebsite}
+              onChange={(event) =>
+                onChange("businessWebsite", event.target.value)
+              }
+              className={inputClass}
+              placeholder="https://example.com…"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Tax ID / registration number (optional)
+            <input
+              value={draft.businessTaxId}
+              onChange={(event) =>
+                onChange("businessTaxId", event.target.value)
+              }
+              className={inputClass}
+              placeholder="Tax identification number…"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
             Client name
             <input
               value={draft.client}
@@ -229,6 +295,18 @@ export default function InvoiceEditor({
           </label>
         </div>
       </div>
+
+      <InvoiceCustomization
+        invoice={draft}
+        settings={brandingSettings}
+        brandingReady={brandingReady}
+        brandingAvailable={brandingAvailable}
+        brandingMessage={brandingMessage}
+        onTemplateChange={(template: InvoiceTemplate) =>
+          onChange("template", template)
+        }
+        onBrandingChange={onBrandingChange}
+      />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">

@@ -5,10 +5,16 @@ export type Item = {
   price: number;
 };
 
+export type InvoiceTemplate = "classic" | "modern" | "minimal";
+
 export type InvoiceDraft = {
   invoiceNumber: string;
   business: string;
   businessEmail: string;
+  businessAddress: string;
+  businessPhone: string;
+  businessWebsite: string;
+  businessTaxId: string;
   client: string;
   clientEmail: string;
   issueDate: string;
@@ -19,6 +25,24 @@ export type InvoiceDraft = {
   paymentInstructions: string;
   notes: string;
   paymentTerms: string;
+  template: InvoiceTemplate;
+};
+
+export type BusinessProfile = Pick<
+  InvoiceDraft,
+  | "business"
+  | "businessEmail"
+  | "businessAddress"
+  | "businessPhone"
+  | "businessWebsite"
+  | "businessTaxId"
+>;
+
+export type InvoiceBrandingSettings = {
+  logoDataUrl: string | null;
+  accentColor: string;
+  defaultTemplate: InvoiceTemplate;
+  businessProfile: BusinessProfile;
 };
 
 export type Payment = {

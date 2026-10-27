@@ -6,6 +6,11 @@ import InvoiceEditor from "@/components/invoices/InvoiceEditor";
 import InvoicePreview from "@/components/invoices/InvoicePreview";
 import { readInvoices, writeInvoices } from "@/lib/invoice-storage";
 import {
+  DEFAULT_BRANDING_SETTINGS,
+  readBrandingSettings,
+  writeBrandingSettings,
+} from "@/lib/invoice-branding-storage";
+import {
   createInitialInvoiceDraft,
   createInvoiceId,
   defaultDates,
@@ -18,6 +23,7 @@ import {
 } from "@/lib/invoice-utils";
 import type {
   Invoice,
+  InvoiceBrandingSettings,
   InvoiceDraft,
   InvoiceView,
   Item,
@@ -34,11 +40,31 @@ export default function Home() {
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [storageMessage, setStorageMessage] = useState("");
   const [currentView, setCurrentView] = useState<InvoiceView>("dashboard");
+  const [brandingSettings, setBrandingSettings] =
+    useState<InvoiceBrandingSettings>(DEFAULT_BRANDING_SETTINGS);
+  const [brandingReady, setBrandingReady] = useState(false);
+  const [brandingAvailable, setBrandingAvailable] = useState(true);
+  const [brandingMessage, setBrandingMessage] = useState("");
 
   useEffect(() => {
     const result = readInvoices();
+    const brandingResult = readBrandingSettings();
     const timer = window.setTimeout(() => {
       setDraft((current) => ({ ...current, ...defaultDates() }));
+
+      if (brandingResult.ok) {
+        setBrandingSettings(brandingResult.value);
+        setBrandingAvailable(true);
+        setBrandingMessage(brandingResult.message);
+        setDraft((current) => ({
+          ...current,
+          ...brandingResult.value.businessProfile,
+          template: brandingResult.value.defaultTemplate,
+        }));
+      } else {
+        setBrandingAvailable(false);
+        setBrandingMessage(brandingResult.message);
+      }
 
       if (result.ok) {
         setSavedInvoices(result.value);
@@ -54,6 +80,7 @@ export default function Home() {
       }
 
       setStorageReady(true);
+      setBrandingReady(true);
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -65,6 +92,22 @@ export default function Home() {
   ) {
     setDraft((current) => ({ ...current, [field]: value }));
     setIsDirty(true);
+  }
+
+  function updateBrandingSettings(settings: InvoiceBrandingSettings) {
+    if (!brandingReady || !brandingAvailable) {
+      return "Brand settings are unavailable. Existing settings have been preserved.";
+    }
+
+    const result = writeBrandingSettings(settings);
+    if (!result.ok) {
+      setBrandingMessage(result.message);
+      return result.message;
+    }
+
+    setBrandingSettings(result.value);
+    setBrandingMessage("");
+    return null;
   }
 
   function updateItem(id: number, field: keyof Item, value: string | number) {
@@ -192,6 +235,8 @@ export default function Home() {
     setDraft({
       ...createInitialInvoiceDraft(),
       ...dates,
+      ...brandingSettings.businessProfile,
+      template: brandingSettings.defaultTemplate,
       client: "",
       items: [],
       invoiceNumber: nextInvoiceNumber(savedInvoices, draft.invoiceNumber),
@@ -357,6 +402,7 @@ export default function Home() {
 
   return (
     <main
+      data-view={currentView}
       id="main-content"
       className="min-h-screen bg-[#f8f9fc] text-slate-900"
     >
@@ -432,7 +478,10 @@ export default function Home() {
           )}
         </div>
 
-        <div className={currentView === "dashboard" ? "" : "hidden"}>
+        <div
+          data-dashboard-view
+          className={currentView === "dashboard" ? "" : "hidden"}
+        >
           <InvoiceDashboard
             invoices={savedInvoices}
             storageReady={storageReady}
@@ -454,6 +503,10 @@ export default function Home() {
             status={activeStatus}
             payments={activeInvoice?.payments ?? []}
             balance={activeBalance}
+            brandingSettings={brandingSettings}
+            brandingReady={brandingReady}
+            brandingAvailable={brandingAvailable}
+            brandingMessage={brandingMessage}
             storageReady={storageReady}
             storageAvailable={storageAvailable}
             storageMessage={storageMessage}
@@ -462,6 +515,7 @@ export default function Home() {
             onAddItem={addItem}
             onRemoveItem={removeItem}
             onSave={saveInvoice}
+            onBrandingChange={updateBrandingSettings}
             onMarkSent={markInvoiceSent}
             onSavePayment={savePayment}
             onDeletePayment={deletePayment}
@@ -471,6 +525,7 @@ export default function Home() {
           <InvoicePreview
             invoice={draft}
             status={activeStatus}
+            brandingSettings={brandingSettings}
             amountPaid={
               activeInvoice ? totalPaid(activeInvoice.payments) : 0
             }

@@ -2,6 +2,7 @@ import type {
   Invoice,
   InvoiceDisplayStatus,
   InvoiceDraft,
+  InvoiceTemplate,
   Item,
   Payment,
   PaymentDraft,
@@ -39,6 +40,10 @@ export function createInitialInvoiceDraft(): InvoiceDraft {
     invoiceNumber: "INV-001",
     business: "Acme Studio",
     businessEmail: "",
+    businessAddress: "",
+    businessPhone: "",
+    businessWebsite: "",
+    businessTaxId: "",
     client: "John Smith",
     clientEmail: "",
     issueDate: "",
@@ -52,7 +57,12 @@ export function createInitialInvoiceDraft(): InvoiceDraft {
     paymentInstructions: "",
     notes: "",
     paymentTerms: "",
+    template: "modern",
   };
+}
+
+export function isInvoiceTemplate(value: unknown): value is InvoiceTemplate {
+  return value === "classic" || value === "modern" || value === "minimal";
 }
 
 export function invoiceTotal(invoice: Pick<Invoice, "items" | "tax">) {
@@ -197,6 +207,10 @@ export function isInvoice(value: unknown): value is Invoice {
     typeof value.invoiceNumber !== "string" ||
     typeof value.business !== "string" ||
     typeof value.businessEmail !== "string" ||
+    typeof value.businessAddress !== "string" ||
+    typeof value.businessPhone !== "string" ||
+    typeof value.businessWebsite !== "string" ||
+    typeof value.businessTaxId !== "string" ||
     typeof value.client !== "string" ||
     typeof value.clientEmail !== "string" ||
     typeof value.issueDate !== "string" ||
@@ -206,6 +220,7 @@ export function isInvoice(value: unknown): value is Invoice {
     typeof value.paymentInstructions !== "string" ||
     typeof value.notes !== "string" ||
     typeof value.paymentTerms !== "string" ||
+    !isInvoiceTemplate(value.template) ||
     !Array.isArray(value.items) ||
     !Array.isArray(value.payments)
   ) {
@@ -251,6 +266,15 @@ export function normalizeInvoice(value: unknown): Invoice | null {
   const normalized = {
     ...value,
     payments: value.payments === undefined ? [] : value.payments,
+    businessAddress:
+      value.businessAddress === undefined ? "" : value.businessAddress,
+    businessPhone:
+      value.businessPhone === undefined ? "" : value.businessPhone,
+    businessWebsite:
+      value.businessWebsite === undefined ? "" : value.businessWebsite,
+    businessTaxId:
+      value.businessTaxId === undefined ? "" : value.businessTaxId,
+    template: value.template === undefined ? "modern" : value.template,
   };
   if (!isInvoice(normalized)) return null;
   if (
