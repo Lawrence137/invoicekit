@@ -10,12 +10,43 @@ type Item = {
   price: number;
 };
 
+function dateInputValue(date: Date) {
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function formatInvoiceDate(value: string) {
+  if (!value) return "—";
+
+  return new Date(`${value}T00:00:00Z`).toLocaleDateString("en-GB", {
+    timeZone: "UTC",
+  });
+}
+
 export default function Home() {
   const [business, setBusiness] = useState("Acme Studio");
+  const [businessEmail, setBusinessEmail] = useState("");
   const [client, setClient] = useState("John Smith");
+  const [clientEmail, setClientEmail] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("INV-001");
+  const [dates, setDates] = useState(() => {
+    const issueDate = new Date();
+    const dueDate = new Date(issueDate);
+    dueDate.setUTCDate(dueDate.getUTCDate() + 30);
+
+    return {
+      issueDate: dateInputValue(issueDate),
+      dueDate: dateInputValue(dueDate),
+    };
+  });
   const [currency, setCurrency] = useState("KES");
   const [tax, setTax] = useState(0);
+  const [paymentInstructions, setPaymentInstructions] = useState("");
+  const [notes, setNotes] = useState("");
+  const [paymentTerms, setPaymentTerms] = useState("");
   const [items, setItems] = useState<Item[]>([
     { id: 1, description: "Website design", quantity: 1, price: 25000 },
     { id: 2, description: "Development", quantity: 1, price: 40000 },
@@ -65,7 +96,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="no-print border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
           <a href="/" className="text-xl font-bold tracking-tight">
             Invoice<span className="text-blue-600">Kit</span>
@@ -77,7 +108,7 @@ export default function Home() {
       </header>
 
       <div className="mx-auto max-w-7xl px-5 py-8">
-        <div className="mb-8">
+        <div className="no-print mb-8">
           <p className="text-sm font-medium text-blue-600">
             WORKSPACE / INVOICES
           </p>
@@ -89,9 +120,9 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="grid items-start gap-8 lg:grid-cols-2">
+        <div className="invoice-layout grid items-start gap-8 lg:grid-cols-2">
           {/* Invoice editor */}
-          <section className="space-y-6">
+          <section className="no-print space-y-6">
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-lg font-semibold">Invoice details</h2>
 
@@ -107,12 +138,34 @@ export default function Home() {
                 </label>
 
                 <label className="text-sm font-medium">
+                  Business email
+                  <input
+                    type="email"
+                    value={businessEmail}
+                    onChange={(e) => setBusinessEmail(e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="you@business.com"
+                  />
+                </label>
+
+                <label className="text-sm font-medium">
                   Client name
                   <input
                     value={client}
                     onChange={(e) => setClient(e.target.value)}
                     className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                     placeholder="Client name"
+                  />
+                </label>
+
+                <label className="text-sm font-medium">
+                  Client email
+                  <input
+                    type="email"
+                    value={clientEmail}
+                    onChange={(e) => setClientEmail(e.target.value)}
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="client@example.com"
                   />
                 </label>
 
@@ -138,6 +191,36 @@ export default function Home() {
                     <option value="GBP">GBP — British Pound</option>
                   </select>
                 </label>
+
+                <label className="text-sm font-medium">
+                  Issue date
+                  <input
+                    type="date"
+                    value={dates.issueDate}
+                    onChange={(e) =>
+                      setDates((current) => ({
+                        ...current,
+                        issueDate: e.target.value,
+                      }))
+                    }
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+
+                <label className="text-sm font-medium">
+                  Due date
+                  <input
+                    type="date"
+                    value={dates.dueDate}
+                    onChange={(e) =>
+                      setDates((current) => ({
+                        ...current,
+                        dueDate: e.target.value,
+                      }))
+                    }
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
               </div>
             </div>
 
@@ -145,6 +228,7 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Line items</h2>
                 <button
+                  type="button"
                   onClick={addItem}
                   className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
                 >
@@ -163,6 +247,7 @@ export default function Home() {
                         Item {index + 1}
                       </span>
                       <button
+                        type="button"
                         onClick={() => removeItem(item.id)}
                         className="text-sm text-red-500 hover:text-red-700"
                         aria-label={`Remove item ${index + 1}`}
@@ -171,14 +256,17 @@ export default function Home() {
                       </button>
                     </div>
 
-                    <input
-                      value={item.description}
-                      onChange={(e) =>
-                        updateItem(item.id, "description", e.target.value)
-                      }
-                      placeholder="Description of service"
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500"
-                    />
+                    <label className="block text-xs font-medium text-slate-500">
+                      Description
+                      <input
+                        value={item.description}
+                        onChange={(e) =>
+                          updateItem(item.id, "description", e.target.value)
+                        }
+                        placeholder="Description of service"
+                        className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-blue-500"
+                      />
+                    </label>
 
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <label className="text-xs font-medium text-slate-500">
@@ -239,13 +327,52 @@ export default function Home() {
                 />
               </label>
             </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-lg font-semibold">Additional information</h2>
+              <div className="mt-5 space-y-4">
+                <label className="block text-sm font-medium">
+                  Payment instructions
+                  <textarea
+                    value={paymentInstructions}
+                    onChange={(e) => setPaymentInstructions(e.target.value)}
+                    rows={3}
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Bank transfer details or other payment instructions"
+                  />
+                </label>
+
+                <label className="block text-sm font-medium">
+                  Payment terms (optional)
+                  <textarea
+                    value={paymentTerms}
+                    onChange={(e) => setPaymentTerms(e.target.value)}
+                    rows={2}
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="e.g. Payment due within 30 days"
+                  />
+                </label>
+
+                <label className="block text-sm font-medium">
+                  Invoice notes (optional)
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
+                    className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="Add any other information for your client"
+                  />
+                </label>
+              </div>
+            </div>
           </section>
 
           {/* Live invoice preview */}
-          <section className="lg:sticky lg:top-6">
-            <div className="mb-3 flex items-center justify-between">
+          <section className="preview-section lg:sticky lg:top-6">
+            <div className="no-print mb-3 flex items-center justify-between">
               <h2 className="font-semibold">Live preview</h2>
               <button
+                type="button"
                 onClick={() => window.print()}
                 className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
               >
@@ -253,7 +380,7 @@ export default function Home() {
               </button>
             </div>
 
-            <article className="min-h-[600px] rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
+            <article className="invoice-paper min-h-[600px] rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-2xl font-bold tracking-tight">
@@ -262,6 +389,11 @@ export default function Home() {
                   <p className="mt-2 text-sm text-slate-500">
                     Invoice issued by
                   </p>
+                  {businessEmail && (
+                    <p className="mt-1 break-words text-sm text-slate-500">
+                      {businessEmail}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <h3 className="text-3xl font-light tracking-widest text-blue-600">
@@ -283,14 +415,29 @@ export default function Home() {
                   <p className="mt-2 font-semibold">
                     {client || "Client name"}
                   </p>
+                  {clientEmail && (
+                    <p className="mt-1 break-words text-sm text-slate-500">
+                      {clientEmail}
+                    </p>
+                  )}
                 </div>
-                <div className="text-right">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    Date issued
-                  </p>
-                  <p className="mt-2 text-sm">
-                    {new Date().toLocaleDateString("en-GB")}
-                  </p>
+                <div className="space-y-4 text-right">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      Date issued
+                    </p>
+                    <p className="mt-1 text-sm">
+                      {formatInvoiceDate(dates.issueDate)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      Due date
+                    </p>
+                    <p className="mt-1 text-sm">
+                      {formatInvoiceDate(dates.dueDate)}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -334,6 +481,35 @@ export default function Home() {
                 </div>
               </div>
 
+              {(paymentInstructions || paymentTerms || notes) && (
+                <div className="mt-10 space-y-5 border-t border-slate-200 pt-5 text-sm">
+                  {paymentInstructions && (
+                    <div>
+                      <h4 className="font-semibold">Payment instructions</h4>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">
+                        {paymentInstructions}
+                      </p>
+                    </div>
+                  )}
+                  {paymentTerms && (
+                    <div>
+                      <h4 className="font-semibold">Payment terms</h4>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">
+                        {paymentTerms}
+                      </p>
+                    </div>
+                  )}
+                  {notes && (
+                    <div>
+                      <h4 className="font-semibold">Notes</h4>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-slate-600">
+                        {notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="mt-14 border-t border-slate-200 pt-5">
                 <p className="font-semibold">Thank you for your business!</p>
                 <p className="mt-1 text-xs text-slate-400">
@@ -344,7 +520,7 @@ export default function Home() {
           </section>
         </div>
 
-        <footer className="py-8 text-center text-xs text-slate-400">
+        <footer className="no-print py-8 text-center text-xs text-slate-400">
           InvoiceKit · Simple invoicing, done right.
         </footer>
       </div>
