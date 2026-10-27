@@ -5,13 +5,21 @@ import {
   formatCurrency,
   formatInvoiceDate,
 } from "@/lib/invoice-utils";
-import type { InvoiceDraft } from "@/types/invoice";
+import type { InvoiceDisplayStatus, InvoiceDraft } from "@/types/invoice";
 
 type InvoicePreviewProps = {
   invoice: InvoiceDraft;
+  status: InvoiceDisplayStatus;
+  amountPaid: number;
+  balance: number;
 };
 
-export default function InvoicePreview({ invoice }: InvoicePreviewProps) {
+export default function InvoicePreview({
+  invoice,
+  status,
+  amountPaid,
+  balance,
+}: InvoicePreviewProps) {
   const subtotal = calculateSubtotal(invoice.items);
   const taxAmount = (subtotal * invoice.tax) / 100;
   const total = subtotal + taxAmount;
@@ -49,6 +57,9 @@ export default function InvoicePreview({ invoice }: InvoicePreviewProps) {
             </h3>
             <p className="mt-2 text-sm text-slate-500">
               #{invoice.invoiceNumber}
+            </p>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              {status}
             </p>
           </div>
         </div>
@@ -125,6 +136,18 @@ export default function InvoicePreview({ invoice }: InvoicePreviewProps) {
             <span>Total</span>
             <span>{money(total)}</span>
           </div>
+          {amountPaid > 0 && (
+            <div className="flex justify-between text-slate-500">
+              <span>Paid</span>
+              <span>{money(amountPaid)}</span>
+            </div>
+          )}
+          {status !== "draft" && (
+            <div className="flex justify-between text-lg font-bold text-blue-700">
+              <span>Balance due</span>
+              <span>{money(balance)}</span>
+            </div>
+          )}
         </div>
 
         {(invoice.paymentInstructions || invoice.paymentTerms || invoice.notes) && (

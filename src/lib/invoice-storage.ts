@@ -1,4 +1,4 @@
-import { isInvoice } from "@/lib/invoice-utils";
+import { normalizeInvoice } from "@/lib/invoice-utils";
 import type { Invoice } from "@/types/invoice";
 
 export const INVOICE_STORAGE_KEY = "invoicekit_invoices_v1";
@@ -7,15 +7,31 @@ export type InvoiceStorageResult<T> =
   | { ok: true; value: T }
   | { ok: false; message: string };
 
-export function readInvoices(): InvoiceStorageResult<Invoice[]> {
+export type InvoiceReadResult =
+  | {
+      ok: true;
+      value: Invoice[];
+      storageAvailable: boolean;
+      message: string;
+    }
+  | { ok: false; message: string };
+
+export function readInvoices(): InvoiceReadResult {
   try {
     const storedInvoices = window.localStorage.getItem(INVOICE_STORAGE_KEY);
     const parsed: unknown = storedInvoices ? JSON.parse(storedInvoices) : [];
 
+    if (!Array.isArray(parsed)) {
+      return {
+        ok: false,
+        message: "Saved invoice data is invalid. It has been left untouched.",
+      };
+    }
+
+    const invoices = parsed.map(normalizeInvoice);
     if (
-      !Array.isArray(parsed) ||
-      !parsed.every(isInvoice) ||
-      new Set(parsed.map((invoice) => invoice.id)).size !== parsed.length
+      invoices.some((invoice) => invoice === null) ||
+      new Set(invoices.map((invoice) => invoice?.id)).size !== invoices.length
     ) {
       return {
         ok: false,
@@ -23,7 +39,36 @@ export function readInvoices(): InvoiceStorageResult<Invoice[]> {
       };
     }
 
-    return { ok: true, value: parsed };
+    const normalizedInvoices = invoices.filter(
+      (invoice): invoice is Invoice => invoice !== null
+    );
+    const needsMigration = parsed.some((invoice, index) => {
+      if (typeof invoice !== "object" || invoice === null) return false;
+      return (
+        !("payments" in invoice) ||
+        invoices[index]?.status !== invoice.status
+      );
+    });
+
+    if (needsMigration) {
+      const migrationResult = writeInvoices(normalizedInvoices);
+      if (!migrationResult.ok) {
+        return {
+          ok: true,
+          value: normalizedInvoices,
+          storageAvailable: false,
+          message:
+            "Legacy invoices were loaded, but payment fields could not be migrated to browser storage. Existing data was preserved.",
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      value: normalizedInvoices,
+      storageAvailable: true,
+      message: "",
+    };
   } catch {
     return {
       ok: false,

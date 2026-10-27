@@ -5,7 +5,11 @@ import {
   dateInputValue,
   formatCurrency,
   formatInvoiceDate,
+  getInvoiceDisplayStatus,
   invoiceTotal,
+  outstandingBalance,
+  paymentProgress,
+  totalPaid,
 } from "@/lib/invoice-utils";
 import type { DashboardFilter, Invoice } from "@/types/invoice";
 
@@ -21,8 +25,10 @@ type InvoiceDashboardProps = {
 
 const filters: ReadonlyArray<[DashboardFilter, string]> = [
   ["all", "All invoices"],
-  ["drafts", "Drafts"],
+  ["draft", "Drafts"],
+  ["sent", "Sent"],
   ["overdue", "Overdue"],
+  ["paid", "Paid"],
   ["due-soon", "Due in 7 days"],
 ];
 
@@ -41,17 +47,29 @@ export default function InvoiceDashboard({
   const nextSevenDays = new Date();
   nextSevenDays.setUTCDate(nextSevenDays.getUTCDate() + 7);
   const dueWithinSevenDays = dateInputValue(nextSevenDays);
-  const overdueCount = invoices.filter(
-    (invoice) => invoice.dueDate && invoice.dueDate < today
-  ).length;
-  const totalsByCurrency = invoices.reduce<Record<string, number>>(
-    (totals, invoice) => {
-      totals[invoice.currency] =
-        (totals[invoice.currency] ?? 0) + invoiceTotal(invoice);
-      return totals;
+  const counts = invoices.reduce(
+    (result, invoice) => {
+      if (invoice.status === "draft") result.draft += 1;
+      if (invoice.status === "sent") result.sent += 1;
+      if (invoice.status === "paid") result.paid += 1;
+      if (getInvoiceDisplayStatus(invoice) === "overdue") result.overdue += 1;
+      return result;
     },
-    {}
+    { draft: 0, sent: 0, overdue: 0, paid: 0 }
   );
+  const totalsByCurrency = invoices.reduce<
+    Record<string, { total: number; outstanding: number; collected: number }>
+  >((totals, invoice) => {
+    const currencyTotals = (totals[invoice.currency] ??= {
+      total: 0,
+      outstanding: 0,
+      collected: 0,
+    });
+    currencyTotals.total += invoiceTotal(invoice);
+    currencyTotals.outstanding += outstandingBalance(invoice);
+    currencyTotals.collected += totalPaid(invoice.payments);
+    return totals;
+  }, {});
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
   const filteredInvoices = invoices.filter((invoice) => {
     const matchesSearch =
@@ -59,12 +77,15 @@ export default function InvoiceDashboard({
       [invoice.invoiceNumber, invoice.client, invoice.clientEmail].some(
         (value) => value.toLocaleLowerCase().includes(normalizedSearch)
       );
-    const isOverdue = !!invoice.dueDate && invoice.dueDate < today;
+    const status = getInvoiceDisplayStatus(invoice, today);
     const matchesFilter =
       filter === "all" ||
-      (filter === "drafts" && invoice.status === "draft") ||
-      (filter === "overdue" && isOverdue) ||
+      (filter === "draft" && invoice.status === "draft") ||
+      (filter === "sent" && invoice.status === "sent") ||
+      (filter === "paid" && invoice.status === "paid") ||
+      (filter === "overdue" && status === "overdue") ||
       (filter === "due-soon" &&
+        invoice.status === "sent" &&
         !!invoice.dueDate &&
         invoice.dueDate >= today &&
         invoice.dueDate <= dueWithinSevenDays);
@@ -103,16 +124,22 @@ export default function InvoiceDashboard({
           </p>
           {storageReady && Object.keys(totalsByCurrency).length > 0 ? (
             <ul className="mt-3 space-y-1">
-              {Object.entries(totalsByCurrency).map(
-                ([currency, amount]) => (
+              {Object.entries(totalsByCurrency).map(([currency, values]) => (
                   <li
                     key={currency}
-                    className="text-xl font-bold tracking-tight"
+                    className="space-y-1 text-sm font-medium"
                   >
-                    {formatCurrency(amount, currency)}
+                    <p className="font-bold tracking-tight">
+                      {formatCurrency(values.total, currency)}
+                    </p>
+                    <p className="text-xs font-normal text-slate-500">
+                      Outstanding {formatCurrency(values.outstanding, currency)}
+                    </p>
+                    <p className="text-xs font-normal text-slate-500">
+                      Collected {formatCurrency(values.collected, currency)}
+                    </p>
                   </li>
-                )
-              )}
+                ))}
             </ul>
           ) : (
             <p className="mt-3 text-2xl font-bold tracking-tight">—</p>
@@ -127,9 +154,13 @@ export default function InvoiceDashboard({
             Overdue invoices
           </p>
           <p className="mt-3 text-3xl font-bold tracking-tight">
-            {storageReady ? overdueCount : "—"}
+            {storageReady ? counts.overdue : "—"}
           </p>
-          <p className="mt-1 text-sm text-slate-500">Past their due date</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Drafts {storageReady ? counts.draft : "—"} · Sent{" "}
+            {storageReady ? counts.sent : "—"} · Paid{" "}
+            {storageReady ? counts.paid : "—"}
+          </p>
         </article>
       </div>
 
@@ -215,7 +246,7 @@ export default function InvoiceDashboard({
           </div>
         ) : (
           <div className="overflow-x-auto border-t border-slate-200">
-            <table className="w-full min-w-[850px] text-left text-sm">
+            <table className="w-full min-w-[1050px] text-left text-sm">
               <thead>
                 <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <th scope="col" className="px-5 py-3 font-semibold">
@@ -234,6 +265,12 @@ export default function InvoiceDashboard({
                     Total
                   </th>
                   <th scope="col" className="px-5 py-3 font-semibold">
+                    Payment progress
+                  </th>
+                  <th scope="col" className="px-5 py-3 text-right font-semibold">
+                    Balance
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-semibold">
                     Status
                   </th>
                   <th scope="col" className="px-5 py-3 text-right font-semibold">
@@ -243,8 +280,8 @@ export default function InvoiceDashboard({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredInvoices.map((invoice) => {
-                  const isOverdue =
-                    !!invoice.dueDate && invoice.dueDate < today;
+                  const status = getInvoiceDisplayStatus(invoice, today);
+                  const progress = paymentProgress(invoice);
 
                   return (
                     <tr key={invoice.id} className="hover:bg-slate-50">
@@ -274,14 +311,44 @@ export default function InvoiceDashboard({
                         {formatCurrency(invoiceTotal(invoice), invoice.currency)}
                       </td>
                       <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-2 w-24 overflow-hidden rounded-full bg-slate-100"
+                            role="progressbar"
+                            aria-label={`Payment progress for ${invoice.invoiceNumber}`}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={progress}
+                          >
+                            <div
+                              className="h-full rounded-full bg-blue-600"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-slate-500">
+                            {progress}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right font-medium text-slate-800">
+                        {formatCurrency(
+                          outstandingBalance(invoice),
+                          invoice.currency
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
                         <span
                           className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            isOverdue
+                            status === "overdue"
                               ? "bg-red-50 text-red-700"
-                              : "bg-slate-100 text-slate-600"
+                              : status === "paid"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : status === "sent"
+                                  ? "bg-blue-50 text-blue-700"
+                                  : "bg-slate-100 text-slate-600"
                           }`}
                         >
-                          {isOverdue ? "Overdue" : "Draft"}
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
                         </span>
                       </td>
                       <td className="px-5 py-4">

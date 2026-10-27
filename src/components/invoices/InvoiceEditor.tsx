@@ -1,9 +1,20 @@
 "use client";
 
-import type { InvoiceDraft, Item } from "@/types/invoice";
+import InvoicePayments from "@/components/invoices/InvoicePayments";
+import { formatCurrency, invoiceTotal } from "@/lib/invoice-utils";
+import type {
+  InvoiceDisplayStatus,
+  InvoiceDraft,
+  Item,
+  Payment,
+  PaymentDraft,
+} from "@/types/invoice";
 
 type InvoiceEditorProps = {
   draft: InvoiceDraft;
+  status: InvoiceDisplayStatus;
+  payments: Payment[];
+  balance: number;
   storageReady: boolean;
   storageAvailable: boolean;
   storageMessage: string;
@@ -19,6 +30,9 @@ type InvoiceEditorProps = {
   onAddItem: () => void;
   onRemoveItem: (id: number) => void;
   onSave: () => void;
+  onMarkSent: () => void;
+  onSavePayment: (payment: PaymentDraft, paymentId?: string) => string | null;
+  onDeletePayment: (payment: Payment) => void;
   onNewInvoice: () => void;
   onDashboard: () => void;
 };
@@ -28,6 +42,9 @@ const inputClass =
 
 export default function InvoiceEditor({
   draft,
+  status,
+  payments,
+  balance,
   storageReady,
   storageAvailable,
   storageMessage,
@@ -36,9 +53,14 @@ export default function InvoiceEditor({
   onAddItem,
   onRemoveItem,
   onSave,
+  onMarkSent,
+  onSavePayment,
+  onDeletePayment,
   onNewInvoice,
   onDashboard,
 }: InvoiceEditorProps) {
+  const financialFieldsLocked = status !== "draft";
+
   return (
     <section className="no-print space-y-6">
       <div className="flex flex-wrap gap-3">
@@ -78,6 +100,37 @@ export default function InvoiceEditor({
           {storageMessage}
         </p>
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div>
+          <p className="text-sm text-slate-500">Invoice status</p>
+          <p className="mt-1 font-semibold capitalize text-slate-900">
+            {status}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            Outstanding: {formatCurrency(balance, draft.currency)}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            Invoice total: {formatCurrency(invoiceTotal(draft), draft.currency)}
+          </p>
+        </div>
+        {status === "draft" && (
+          <button
+            type="button"
+            onClick={onMarkSent}
+            disabled={!storageAvailable}
+            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Mark as sent
+          </button>
+        )}
+        {financialFieldsLocked && (
+          <p className="max-w-md text-sm text-slate-500">
+            Financial details are locked after sending to keep the invoice and
+            recorded payments consistent.
+          </p>
+        )}
+      </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold">Invoice details</h2>
@@ -133,6 +186,7 @@ export default function InvoiceEditor({
               onChange={(event) =>
                 onChange("invoiceNumber", event.target.value)
               }
+              disabled={financialFieldsLocked}
               className={inputClass}
             />
           </label>
@@ -142,6 +196,7 @@ export default function InvoiceEditor({
             <select
               value={draft.currency}
               onChange={(event) => onChange("currency", event.target.value)}
+              disabled={financialFieldsLocked}
               className={`${inputClass} bg-white`}
             >
               <option value="KES">KES — Kenyan Shilling</option>
@@ -157,6 +212,7 @@ export default function InvoiceEditor({
               type="date"
               value={draft.issueDate}
               onChange={(event) => onChange("issueDate", event.target.value)}
+              disabled={financialFieldsLocked}
               className={inputClass}
             />
           </label>
@@ -167,6 +223,7 @@ export default function InvoiceEditor({
               type="date"
               value={draft.dueDate}
               onChange={(event) => onChange("dueDate", event.target.value)}
+              disabled={financialFieldsLocked}
               className={inputClass}
             />
           </label>
@@ -179,6 +236,7 @@ export default function InvoiceEditor({
           <button
             type="button"
             onClick={onAddItem}
+            disabled={financialFieldsLocked}
             className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
           >
             + Add item
@@ -198,6 +256,7 @@ export default function InvoiceEditor({
                 <button
                   type="button"
                   onClick={() => onRemoveItem(item.id)}
+                  disabled={financialFieldsLocked}
                   className="text-sm text-red-500 hover:text-red-700"
                   aria-label={`Remove item ${index + 1}`}
                 >
@@ -212,6 +271,7 @@ export default function InvoiceEditor({
                   onChange={(event) =>
                     onItemChange(item.id, "description", event.target.value)
                   }
+                  disabled={financialFieldsLocked}
                   placeholder="Description of service"
                   className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-blue-500"
                 />
@@ -224,6 +284,7 @@ export default function InvoiceEditor({
                     type="number"
                     min="0"
                     value={item.quantity}
+                    disabled={financialFieldsLocked}
                     onChange={(event) =>
                       onItemChange(
                         item.id,
@@ -240,6 +301,7 @@ export default function InvoiceEditor({
                     type="number"
                     min="0"
                     value={item.price}
+                    disabled={financialFieldsLocked}
                     onChange={(event) =>
                       onItemChange(
                         item.id,
@@ -268,6 +330,7 @@ export default function InvoiceEditor({
             min="0"
             max="100"
             value={draft.tax}
+            disabled={financialFieldsLocked}
             onChange={(event) =>
               onChange(
                 "tax",
@@ -318,6 +381,18 @@ export default function InvoiceEditor({
           </label>
         </div>
       </div>
+
+      {status !== "draft" && (
+        <InvoicePayments
+          payments={payments}
+          currency={draft.currency}
+          status={status}
+          balance={balance}
+          storageAvailable={storageAvailable}
+          onSavePayment={onSavePayment}
+          onDeletePayment={onDeletePayment}
+        />
+      )}
     </section>
   );
 }

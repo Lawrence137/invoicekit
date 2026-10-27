@@ -1,4 +1,11 @@
-import type { Invoice, InvoiceDraft, Item } from "@/types/invoice";
+import type {
+  Invoice,
+  InvoiceDisplayStatus,
+  InvoiceDraft,
+  Item,
+  Payment,
+  PaymentDraft,
+} from "@/types/invoice";
 
 export function dateInputValue(date: Date) {
   return [
@@ -49,12 +56,8 @@ export function createInitialInvoiceDraft(): InvoiceDraft {
 }
 
 export function invoiceTotal(invoice: Pick<Invoice, "items" | "tax">) {
-  const subtotal = invoice.items.reduce(
-    (sum, item) => sum + item.quantity * item.price,
-    0
-  );
-
-  return subtotal + (subtotal * invoice.tax) / 100;
+  const subtotal = calculateSubtotal(invoice.items);
+  return roundCurrency(subtotal + (subtotal * invoice.tax) / 100);
 }
 
 export function calculateSubtotal(items: Item[]) {
@@ -70,6 +73,64 @@ export function formatCurrency(amount: number, currency: string) {
     currency,
     maximumFractionDigits: 2,
   }).format(amount);
+}
+
+export function roundCurrency(amount: number) {
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+
+export function totalPaid(payments: Payment[]) {
+  return roundCurrency(
+    payments.reduce((total, payment) => total + payment.amount, 0)
+  );
+}
+
+export function outstandingBalance(invoice: Invoice) {
+  return roundCurrency(Math.max(0, invoiceTotal(invoice) - totalPaid(invoice.payments)));
+}
+
+export function paymentProgress(invoice: Invoice) {
+  const total = invoiceTotal(invoice);
+  if (total <= 0) return invoice.status === "paid" ? 100 : 0;
+  return Math.min(100, Math.round((totalPaid(invoice.payments) / total) * 100));
+}
+
+export function getInvoiceDisplayStatus(
+  invoice: Invoice,
+  today = dateInputValue(new Date())
+): InvoiceDisplayStatus {
+  if (outstandingBalance(invoice) === 0 && invoice.status === "paid") {
+    return "paid";
+  }
+  if (
+    invoice.status === "sent" &&
+    invoice.dueDate &&
+    invoice.dueDate < today &&
+    outstandingBalance(invoice) > 0
+  ) {
+    return "overdue";
+  }
+  return invoice.status;
+}
+
+export function isValidIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && dateInputValue(date) === value;
+}
+
+export function validatePayment(
+  payment: PaymentDraft,
+  availableBalance: number
+): string | null {
+  if (!isValidIsoDate(payment.date)) return "Enter a valid payment date.";
+  if (!Number.isFinite(payment.amount) || payment.amount <= 0) {
+    return "Payment amount must be greater than zero.";
+  }
+  if (roundCurrency(payment.amount) > roundCurrency(availableBalance)) {
+    return "Payment amount cannot exceed the outstanding balance.";
+  }
+  return null;
 }
 
 export function nextInvoiceNumber(invoices: Invoice[], currentNumber = "") {
@@ -106,32 +167,98 @@ function isItem(value: unknown): value is Item {
     typeof value.description === "string" &&
     typeof value.quantity === "number" &&
     Number.isFinite(value.quantity) &&
+    value.quantity >= 0 &&
     typeof value.price === "number" &&
-    Number.isFinite(value.price)
+    Number.isFinite(value.price) &&
+    value.price >= 0
+  );
+}
+
+function isPayment(value: unknown): value is Payment {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.date === "string" &&
+    isValidIsoDate(value.date) &&
+    typeof value.amount === "number" &&
+    Number.isFinite(value.amount) &&
+    value.amount > 0 &&
+    (value.method === undefined || typeof value.method === "string") &&
+    (value.reference === undefined || typeof value.reference === "string")
   );
 }
 
 export function isInvoice(value: unknown): value is Invoice {
   if (!isRecord(value)) return false;
 
+  if (
+    typeof value.id !== "string" ||
+    typeof value.invoiceNumber !== "string" ||
+    typeof value.business !== "string" ||
+    typeof value.businessEmail !== "string" ||
+    typeof value.client !== "string" ||
+    typeof value.clientEmail !== "string" ||
+    typeof value.issueDate !== "string" ||
+    typeof value.dueDate !== "string" ||
+    typeof value.currency !== "string" ||
+    typeof value.tax !== "number" ||
+    typeof value.paymentInstructions !== "string" ||
+    typeof value.notes !== "string" ||
+    typeof value.paymentTerms !== "string" ||
+    !Array.isArray(value.items) ||
+    !Array.isArray(value.payments)
+  ) {
+    return false;
+  }
+
+  if (
+    (value.issueDate !== "" && !isValidIsoDate(value.issueDate)) ||
+    (value.dueDate !== "" && !isValidIsoDate(value.dueDate)) ||
+    !["KES", "USD", "EUR", "GBP"].includes(value.currency) ||
+    !Number.isFinite(value.tax) ||
+    value.tax < 0 ||
+    value.tax > 100 ||
+    (value.status !== "draft" &&
+      value.status !== "sent" &&
+      value.status !== "paid") ||
+    !value.items.every(isItem) ||
+    !value.payments.every(isPayment)
+  ) {
+    return false;
+  }
+
+  const items = value.items.filter(isItem);
+  const payments = value.payments.filter(isPayment);
+  if (
+    new Set(payments.map((payment) => payment.id)).size !== payments.length
+  ) {
+    return false;
+  }
+
+  const paid = totalPaid(payments);
+  const subtotal = calculateSubtotal(items);
+  const total = roundCurrency(subtotal + (subtotal * value.tax) / 100);
   return (
-    typeof value.id === "string" &&
-    typeof value.invoiceNumber === "string" &&
-    typeof value.business === "string" &&
-    typeof value.businessEmail === "string" &&
-    typeof value.client === "string" &&
-    typeof value.clientEmail === "string" &&
-    typeof value.issueDate === "string" &&
-    typeof value.dueDate === "string" &&
-    typeof value.currency === "string" &&
-    ["KES", "USD", "EUR", "GBP"].includes(value.currency) &&
-    typeof value.tax === "number" &&
-    Number.isFinite(value.tax) &&
-    typeof value.paymentInstructions === "string" &&
-    typeof value.notes === "string" &&
-    typeof value.paymentTerms === "string" &&
-    value.status === "draft" &&
-    Array.isArray(value.items) &&
-    value.items.every(isItem)
+    paid <= total &&
+    (value.status !== "paid" || paid >= total) &&
+    (value.status !== "draft" || payments.length === 0)
   );
+}
+
+export function normalizeInvoice(value: unknown): Invoice | null {
+  if (!isRecord(value)) return null;
+  const normalized = {
+    ...value,
+    payments: value.payments === undefined ? [] : value.payments,
+  };
+  if (!isInvoice(normalized)) return null;
+  if (
+    normalized.status === "sent" &&
+    invoiceTotal(normalized) > 0 &&
+    outstandingBalance(normalized) === 0
+  ) {
+    return { ...normalized, status: "paid" };
+  }
+  return normalized;
 }

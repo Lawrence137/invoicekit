@@ -9,9 +9,21 @@ import {
   createInitialInvoiceDraft,
   createInvoiceId,
   defaultDates,
+  getInvoiceDisplayStatus,
+  invoiceTotal,
   nextInvoiceNumber,
+  outstandingBalance,
+  totalPaid,
+  validatePayment,
 } from "@/lib/invoice-utils";
-import type { Invoice, InvoiceDraft, InvoiceView, Item } from "@/types/invoice";
+import type {
+  Invoice,
+  InvoiceDraft,
+  InvoiceView,
+  Item,
+  Payment,
+  PaymentDraft,
+} from "@/types/invoice";
 
 export default function Home() {
   const [draft, setDraft] = useState<InvoiceDraft>(createInitialInvoiceDraft);
@@ -30,6 +42,8 @@ export default function Home() {
 
       if (result.ok) {
         setSavedInvoices(result.value);
+        setStorageAvailable(result.storageAvailable);
+        setStorageMessage(result.message);
         setDraft((current) => ({
           ...current,
           invoiceNumber: nextInvoiceNumber(result.value),
@@ -87,12 +101,12 @@ export default function Home() {
     setIsDirty(true);
   }
 
-  function saveInvoice() {
+  function saveInvoice(): Invoice | null {
     if (!storageReady || !storageAvailable) {
       setStorageMessage(
         "Saving is unavailable because browser storage could not be read."
       );
-      return false;
+      return null;
     }
 
     const existing = savedInvoices.find(
@@ -102,8 +116,21 @@ export default function Home() {
       ...draft,
       id: existing?.id ?? createInvoiceId(),
       items: draft.items.map((item) => ({ ...item })),
-      status: "draft",
+      status: existing?.status ?? "draft",
+      payments: existing?.payments ?? [],
     };
+    if (
+      savedInvoices.some(
+        (saved) =>
+          saved.id !== invoice.id &&
+          saved.invoiceNumber.toLocaleLowerCase() ===
+            invoice.invoiceNumber.toLocaleLowerCase()
+      )
+    ) {
+      setStorageMessage("Invoice number is already in use.");
+      return null;
+    }
+
     const updatedInvoices = existing
       ? savedInvoices.map((saved) =>
           saved.id === existing.id ? invoice : saved
@@ -113,14 +140,14 @@ export default function Home() {
 
     if (!result.ok) {
       setStorageMessage(result.message);
-      return false;
+      return null;
     }
 
     setSavedInvoices(updatedInvoices);
     setActiveInvoiceId(invoice.id);
     setIsDirty(false);
     setStorageMessage(`Invoice ${invoice.invoiceNumber} saved.`);
-    return true;
+    return invoice;
   }
 
   function saveBeforeSwitch() {
@@ -133,7 +160,7 @@ export default function Home() {
       return false;
     }
 
-    return saveInvoice();
+    return saveInvoice() !== null;
   }
 
   function openInvoice(invoice: Invoice) {
@@ -206,6 +233,127 @@ export default function Home() {
     }
     setStorageMessage(`Invoice ${invoice.invoiceNumber} deleted.`);
   }
+
+  function updatePersistedInvoice(updatedInvoice: Invoice) {
+    const alreadySaved = savedInvoices.some(
+      (invoice) => invoice.id === updatedInvoice.id
+    );
+    const updatedInvoices = alreadySaved
+      ? savedInvoices.map((invoice) =>
+          invoice.id === updatedInvoice.id ? updatedInvoice : invoice
+        )
+      : [...savedInvoices, updatedInvoice];
+    const result = writeInvoices(updatedInvoices);
+    if (!result.ok) {
+      setStorageMessage(result.message);
+      return false;
+    }
+    setSavedInvoices(updatedInvoices);
+    return true;
+  }
+
+  function markInvoiceSent() {
+    if (!storageAvailable) return;
+    if (!window.confirm("Mark this invoice as sent? Its financial details will be locked.")) {
+      return;
+    }
+
+    const invoice = saveInvoice();
+    if (!invoice) return;
+    const sentInvoice: Invoice = { ...invoice, status: "sent" };
+    if (updatePersistedInvoice(sentInvoice)) {
+      setIsDirty(false);
+      setStorageMessage(`Invoice ${sentInvoice.invoiceNumber} marked as sent.`);
+    }
+  }
+
+  function savePayment(paymentDraft: PaymentDraft, paymentId?: string) {
+    const invoice = savedInvoices.find(
+      (saved) => saved.id === activeInvoiceId
+    );
+    if (!invoice || invoice.status === "draft") {
+      return "Save and mark this invoice as sent before recording payments.";
+    }
+
+    const existingPayment = paymentId
+      ? invoice.payments.find((payment) => payment.id === paymentId)
+      : undefined;
+    if (paymentId && !existingPayment) {
+      return "This payment could not be found. Reload the invoice and try again.";
+    }
+    const availableBalance =
+      outstandingBalance(invoice) + (existingPayment?.amount ?? 0);
+    const validationMessage = validatePayment(paymentDraft, availableBalance);
+    if (validationMessage) return validationMessage;
+
+    const payment: Payment = {
+      ...paymentDraft,
+      id: existingPayment?.id ?? createInvoiceId(),
+    };
+    const payments = existingPayment
+      ? invoice.payments.map((saved) =>
+          saved.id === existingPayment.id ? payment : saved
+        )
+      : [...invoice.payments, payment];
+    const updatedInvoice: Invoice = {
+      ...invoice,
+      payments,
+      status:
+        invoiceTotal(invoice) > 0 &&
+        totalPaid(payments) >= invoiceTotal(invoice)
+          ? "paid"
+          : "sent",
+    };
+
+    if (!updatePersistedInvoice(updatedInvoice)) {
+      return "Payment could not be saved to browser storage.";
+    }
+    setStorageMessage(
+      existingPayment
+        ? `Payment for invoice ${invoice.invoiceNumber} corrected.`
+        : `Payment recorded for invoice ${invoice.invoiceNumber}.`
+    );
+    return null;
+  }
+
+  function deletePayment(invoicePayment: Payment) {
+    const invoice = savedInvoices.find(
+      (saved) => saved.id === activeInvoiceId
+    );
+    if (!invoice) return;
+    if (
+      !window.confirm(
+        `Delete this ${invoice.currency} ${invoicePayment.amount.toFixed(2)} payment?`
+      )
+    ) {
+      return;
+    }
+    const payments = invoice.payments.filter(
+      (payment) => payment.id !== invoicePayment.id
+    );
+    const updatedInvoice: Invoice = {
+      ...invoice,
+      payments,
+      status:
+        invoiceTotal(invoice) > 0 &&
+        totalPaid(payments) >= invoiceTotal(invoice)
+          ? "paid"
+          : "sent",
+    };
+    if (updatePersistedInvoice(updatedInvoice)) {
+      setStorageMessage(`Payment deleted from invoice ${invoice.invoiceNumber}.`);
+    }
+  }
+
+  const activeInvoice = savedInvoices.find(
+    (invoice) => invoice.id === activeInvoiceId
+  );
+  const activeStatus = activeInvoice
+    ? getInvoiceDisplayStatus(activeInvoice)
+    : "draft";
+  const activeBalance = activeInvoice
+    ? outstandingBalance(activeInvoice)
+    : invoiceTotal(draft);
 
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
@@ -297,6 +445,9 @@ export default function Home() {
         >
           <InvoiceEditor
             draft={draft}
+            status={activeStatus}
+            payments={activeInvoice?.payments ?? []}
+            balance={activeBalance}
             storageReady={storageReady}
             storageAvailable={storageAvailable}
             storageMessage={storageMessage}
@@ -305,10 +456,20 @@ export default function Home() {
             onAddItem={addItem}
             onRemoveItem={removeItem}
             onSave={saveInvoice}
+            onMarkSent={markInvoiceSent}
+            onSavePayment={savePayment}
+            onDeletePayment={deletePayment}
             onNewInvoice={startNewInvoice}
             onDashboard={showDashboard}
           />
-          <InvoicePreview invoice={draft} />
+          <InvoicePreview
+            invoice={draft}
+            status={activeStatus}
+            amountPaid={
+              activeInvoice ? totalPaid(activeInvoice.payments) : 0
+            }
+            balance={activeBalance}
+          />
         </div>
 
         <footer className="no-print py-8 text-center text-xs text-slate-400">

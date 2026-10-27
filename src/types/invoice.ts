@@ -21,11 +21,30 @@ export type InvoiceDraft = {
   paymentTerms: string;
 };
 
-export type Invoice = InvoiceDraft & {
+export type Payment = {
   id: string;
-  status: "draft";
+  date: string;
+  amount: number;
+  method?: string;
+  reference?: string;
 };
 
-export type DashboardFilter = "all" | "drafts" | "overdue" | "due-soon";
+export type PaymentDraft = Omit<Payment, "id">;
+export type InvoiceLifecycleStatus = "draft" | "sent" | "paid";
+export type InvoiceDisplayStatus = InvoiceLifecycleStatus | "overdue";
+
+export type Invoice = InvoiceDraft & {
+  id: string;
+  status: InvoiceLifecycleStatus;
+  payments: Payment[];
+};
+
+export type DashboardFilter =
+  | "all"
+  | "draft"
+  | "sent"
+  | "overdue"
+  | "paid"
+  | "due-soon";
 
 export type InvoiceView = "dashboard" | "editor";
