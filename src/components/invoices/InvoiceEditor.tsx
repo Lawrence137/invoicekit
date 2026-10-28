@@ -2,7 +2,10 @@
 
 import InvoicePayments from "@/components/invoices/InvoicePayments";
 import InvoiceCustomization from "@/components/invoices/InvoiceCustomization";
+import ClientFormModal from "@/components/invoices/ClientFormModal";
 import { formatCurrency, invoiceTotal } from "@/lib/invoice-utils";
+import { useState } from "react";
+import type { Client, ClientProfileDraft } from "@/types/client";
 import type {
   InvoiceBrandingSettings,
   InvoiceDisplayStatus,
@@ -25,6 +28,10 @@ type InvoiceEditorProps = {
   storageReady: boolean;
   storageAvailable: boolean;
   storageMessage: string;
+  clients: Client[];
+  clientStorageReady: boolean;
+  clientStorageAvailable: boolean;
+  selectedClientId: string | null;
   onChange: <K extends keyof InvoiceDraft>(
     field: K,
     value: InvoiceDraft[K]
@@ -45,6 +52,19 @@ type InvoiceEditorProps = {
   onDeletePayment: (payment: Payment) => void;
   onNewInvoice: () => void;
   onDashboard: () => void;
+  onSelectClient: (clientId: string) => void;
+  onApplyClient: (client: Client) => void;
+  onClientFieldChange: (
+    field:
+      | "client"
+      | "clientCompany"
+      | "clientEmail"
+      | "clientPhone"
+      | "clientAddress"
+      | "clientTaxId",
+    value: string
+  ) => void;
+  onSaveClient: (profile: ClientProfileDraft) => Client | null;
 };
 
 const inputClass =
@@ -62,6 +82,10 @@ export default function InvoiceEditor({
   storageReady,
   storageAvailable,
   storageMessage,
+  clients,
+  clientStorageReady,
+  clientStorageAvailable,
+  selectedClientId,
   onChange,
   onItemChange,
   onAddItem,
@@ -73,8 +97,13 @@ export default function InvoiceEditor({
   onDeletePayment,
   onNewInvoice,
   onDashboard,
+  onSelectClient,
+  onApplyClient,
+  onClientFieldChange,
+  onSaveClient,
 }: InvoiceEditorProps) {
   const financialFieldsLocked = status !== "draft";
+  const [saveAsClientOpen, setSaveAsClientOpen] = useState(false);
 
   return (
     <section className="no-print space-y-6">
@@ -224,13 +253,73 @@ export default function InvoiceEditor({
             />
           </label>
 
+          <div className="sm:col-span-2 rounded-xl border border-slate-100 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <label className="min-w-52 flex-1 text-sm font-medium">
+                Use saved client
+                <select
+                  aria-label="Select a saved client"
+                  value={selectedClientId ?? ""}
+                  disabled={!clientStorageReady || !clientStorageAvailable}
+                  onChange={(event) => onSelectClient(event.target.value)}
+                  className={`${inputClass} bg-white`}
+                >
+                  <option value="">Enter client details manually</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                      {client.company ? ` · ${client.company}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setSaveAsClientOpen(true)}
+                disabled={
+                  !clientStorageReady ||
+                  !clientStorageAvailable ||
+                  !draft.client.trim()
+                }
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save as client
+              </button>
+            </div>
+            {!clientStorageReady || !clientStorageAvailable ? (
+              <p className="mt-2 text-xs text-amber-700" role="status">
+                Saved client profiles are unavailable. You can still enter client
+                details manually.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                Saved profiles fill invoice snapshots. Later profile edits will not
+                change existing invoices.
+              </p>
+            )}
+          </div>
+
           <label className="text-sm font-medium">
             Client name
             <input
               value={draft.client}
-              onChange={(event) => onChange("client", event.target.value)}
+              onChange={(event) =>
+                onClientFieldChange("client", event.target.value)
+              }
               className={inputClass}
               placeholder="Client name"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Company (optional)
+            <input
+              value={draft.clientCompany}
+              onChange={(event) =>
+                onClientFieldChange("clientCompany", event.target.value)
+              }
+              className={inputClass}
+              placeholder="Company name"
             />
           </label>
 
@@ -239,9 +328,49 @@ export default function InvoiceEditor({
             <input
               type="email"
               value={draft.clientEmail}
-              onChange={(event) => onChange("clientEmail", event.target.value)}
+              onChange={(event) =>
+                onClientFieldChange("clientEmail", event.target.value)
+              }
               className={inputClass}
               placeholder="client@example.com"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Client phone (optional)
+            <input
+              type="tel"
+              value={draft.clientPhone}
+              onChange={(event) =>
+                onClientFieldChange("clientPhone", event.target.value)
+              }
+              className={inputClass}
+              placeholder="+1 555 0100"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Client billing address (optional)
+            <textarea
+              value={draft.clientAddress}
+              onChange={(event) =>
+                onClientFieldChange("clientAddress", event.target.value)
+              }
+              rows={2}
+              className={inputClass}
+              placeholder="Street address, city, postal code…"
+            />
+          </label>
+
+          <label className="text-sm font-medium">
+            Client tax ID (optional)
+            <input
+              value={draft.clientTaxId}
+              onChange={(event) =>
+                onClientFieldChange("clientTaxId", event.target.value)
+              }
+              className={inputClass}
+              placeholder="Tax or registration number"
             />
           </label>
 
@@ -307,6 +436,26 @@ export default function InvoiceEditor({
         }
         onBrandingChange={onBrandingChange}
       />
+
+      {saveAsClientOpen && (
+        <ClientFormModal
+          initialProfile={{
+            name: draft.client,
+            company: draft.clientCompany,
+            email: draft.clientEmail,
+            phone: draft.clientPhone,
+            billingAddress: draft.clientAddress,
+            taxId: draft.clientTaxId,
+            notes: "",
+          }}
+          onClose={() => setSaveAsClientOpen(false)}
+          onSave={(profile) => {
+            const client = onSaveClient(profile);
+            if (client) onApplyClient(client);
+            return client;
+          }}
+        />
+      )}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">

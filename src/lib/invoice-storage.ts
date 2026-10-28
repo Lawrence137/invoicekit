@@ -50,6 +50,10 @@ export function readInvoices(): InvoiceReadResult {
         !("businessPhone" in invoice) ||
         !("businessWebsite" in invoice) ||
         !("businessTaxId" in invoice) ||
+        !("clientCompany" in invoice) ||
+        !("clientPhone" in invoice) ||
+        !("clientAddress" in invoice) ||
+        !("clientTaxId" in invoice) ||
         !("template" in invoice) ||
         invoices[index]?.status !== invoice.status
       );

@@ -45,7 +45,11 @@ export function createInitialInvoiceDraft(): InvoiceDraft {
     businessWebsite: "",
     businessTaxId: "",
     client: "John Smith",
+    clientCompany: "",
     clientEmail: "",
+    clientPhone: "",
+    clientAddress: "",
+    clientTaxId: "",
     issueDate: "",
     dueDate: "",
     currency: "KES",
@@ -204,6 +208,8 @@ export function isInvoice(value: unknown): value is Invoice {
 
   if (
     typeof value.id !== "string" ||
+    (value.clientId !== undefined &&
+      (typeof value.clientId !== "string" || value.clientId.length === 0)) ||
     typeof value.invoiceNumber !== "string" ||
     typeof value.business !== "string" ||
     typeof value.businessEmail !== "string" ||
@@ -212,7 +218,11 @@ export function isInvoice(value: unknown): value is Invoice {
     typeof value.businessWebsite !== "string" ||
     typeof value.businessTaxId !== "string" ||
     typeof value.client !== "string" ||
+    typeof value.clientCompany !== "string" ||
     typeof value.clientEmail !== "string" ||
+    typeof value.clientPhone !== "string" ||
+    typeof value.clientAddress !== "string" ||
+    typeof value.clientTaxId !== "string" ||
     typeof value.issueDate !== "string" ||
     typeof value.dueDate !== "string" ||
     typeof value.currency !== "string" ||
@@ -274,6 +284,10 @@ export function normalizeInvoice(value: unknown): Invoice | null {
       value.businessWebsite === undefined ? "" : value.businessWebsite,
     businessTaxId:
       value.businessTaxId === undefined ? "" : value.businessTaxId,
+    clientCompany: value.clientCompany === undefined ? "" : value.clientCompany,
+    clientPhone: value.clientPhone === undefined ? "" : value.clientPhone,
+    clientAddress: value.clientAddress === undefined ? "" : value.clientAddress,
+    clientTaxId: value.clientTaxId === undefined ? "" : value.clientTaxId,
     template: value.template === undefined ? "modern" : value.template,
   };
   if (!isInvoice(normalized)) return null;

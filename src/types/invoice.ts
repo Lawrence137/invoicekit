@@ -16,7 +16,11 @@ export type InvoiceDraft = {
   businessWebsite: string;
   businessTaxId: string;
   client: string;
+  clientCompany: string;
   clientEmail: string;
+  clientPhone: string;
+  clientAddress: string;
+  clientTaxId: string;
   issueDate: string;
   dueDate: string;
   currency: string;
@@ -59,6 +63,7 @@ export type InvoiceDisplayStatus = InvoiceLifecycleStatus | "overdue";
 
 export type Invoice = InvoiceDraft & {
   id: string;
+  clientId?: string;
   status: InvoiceLifecycleStatus;
   payments: Payment[];
 };
@@ -71,4 +76,4 @@ export type DashboardFilter =
   | "paid"
   | "due-soon";
 
-export type InvoiceView = "dashboard" | "editor";
+export type InvoiceView = "dashboard" | "editor" | "clients";

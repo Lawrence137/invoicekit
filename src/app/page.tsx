@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from "react";
 import InvoiceDashboard from "@/components/invoices/InvoiceDashboard";
+import ClientDirectory from "@/components/invoices/ClientDirectory";
 import InvoiceEditor from "@/components/invoices/InvoiceEditor";
 import InvoicePreview from "@/components/invoices/InvoicePreview";
 import { readInvoices, writeInvoices } from "@/lib/invoice-storage";
+import {
+  createClientId,
+  readClients,
+  writeClients,
+} from "@/lib/client-storage";
 import {
   DEFAULT_BRANDING_SETTINGS,
   readBrandingSettings,
@@ -30,15 +36,21 @@ import type {
   Payment,
   PaymentDraft,
 } from "@/types/invoice";
+import type { Client, ClientProfileDraft } from "@/types/client";
 
 export default function Home() {
   const [draft, setDraft] = useState<InvoiceDraft>(createInitialInvoiceDraft);
   const [savedInvoices, setSavedInvoices] = useState<Invoice[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [activeInvoiceId, setActiveInvoiceId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [storageMessage, setStorageMessage] = useState("");
+  const [clientStorageReady, setClientStorageReady] = useState(false);
+  const [clientStorageAvailable, setClientStorageAvailable] = useState(true);
+  const [clientStorageMessage, setClientStorageMessage] = useState("");
   const [currentView, setCurrentView] = useState<InvoiceView>("dashboard");
   const [brandingSettings, setBrandingSettings] =
     useState<InvoiceBrandingSettings>(DEFAULT_BRANDING_SETTINGS);
@@ -48,6 +60,7 @@ export default function Home() {
 
   useEffect(() => {
     const result = readInvoices();
+    const clientResult = readClients();
     const brandingResult = readBrandingSettings();
     const timer = window.setTimeout(() => {
       setDraft((current) => ({ ...current, ...defaultDates() }));
@@ -79,6 +92,16 @@ export default function Home() {
         setStorageMessage(result.message);
       }
 
+      if (clientResult.ok) {
+        setClients(clientResult.value);
+        setClientStorageAvailable(true);
+        setClientStorageMessage(clientResult.message);
+      } else {
+        setClientStorageAvailable(false);
+        setClientStorageMessage(clientResult.message);
+      }
+
+      setClientStorageReady(true);
       setStorageReady(true);
       setBrandingReady(true);
     }, 0);
@@ -158,6 +181,7 @@ export default function Home() {
     const invoice: Invoice = {
       ...draft,
       id: existing?.id ?? createInvoiceId(),
+      ...(selectedClientId ? { clientId: selectedClientId } : {}),
       items: draft.items.map((item) => ({ ...item })),
       status: existing?.status ?? "draft",
       payments: existing?.payments ?? [],
@@ -221,6 +245,7 @@ export default function Home() {
         items: invoice.items.map((item) => ({ ...item })),
       });
       setActiveInvoiceId(id);
+      setSelectedClientId(invoice.clientId ?? null);
       setIsDirty(false);
       setStorageMessage(`Opened invoice ${invoice.invoiceNumber}.`);
     }
@@ -242,6 +267,7 @@ export default function Home() {
       invoiceNumber: nextInvoiceNumber(savedInvoices, draft.invoiceNumber),
     });
     setActiveInvoiceId(null);
+    setSelectedClientId(null);
     setIsDirty(false);
     setStorageMessage("Started a new invoice.");
     setCurrentView("editor");
@@ -250,6 +276,132 @@ export default function Home() {
   function showDashboard() {
     if (!saveBeforeSwitch()) return;
     setCurrentView("dashboard");
+  }
+
+  function showClients() {
+    if (!saveBeforeSwitch()) return;
+    setCurrentView("clients");
+  }
+
+  function updateClientProfile(
+    profile: ClientProfileDraft,
+    clientId?: string
+  ): Client | null {
+    if (!clientStorageReady || !clientStorageAvailable) {
+      setClientStorageMessage(
+        "Client profiles cannot be changed because browser storage is unavailable."
+      );
+      return null;
+    }
+
+    const existing = clients.find((client) => client.id === clientId);
+    const now = new Date().toISOString();
+    const client: Client = {
+      ...profile,
+      id: existing?.id ?? createClientId(),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const updatedClients = existing
+      ? clients.map((saved) => (saved.id === existing.id ? client : saved))
+      : [...clients, client];
+    const result = writeClients(updatedClients);
+    if (!result.ok) {
+      setClientStorageMessage(result.message);
+      setClientStorageAvailable(false);
+      return null;
+    }
+
+    setClients(updatedClients);
+    setClientStorageMessage(
+      existing ? `Client ${client.name} updated.` : `Client ${client.name} added.`
+    );
+    return client;
+  }
+
+  function deleteClient(client: Client, relatedInvoiceCount: number) {
+    const invoiceMessage =
+      relatedInvoiceCount > 0
+        ? ` ${relatedInvoiceCount} related invoice(s) and their payment history will remain unchanged with the client details saved on each invoice.`
+        : relatedInvoiceCount < 0
+          ? " Invoice history could not be read; saved invoice data will not be modified."
+          : " Invoices and payment history will not be deleted.";
+    if (
+      !window.confirm(
+        `Delete the saved profile for ${client.name}?${invoiceMessage}`
+      )
+    ) {
+      return false;
+    }
+    const updatedClients = clients.filter((saved) => saved.id !== client.id);
+    const result = writeClients(updatedClients);
+    if (!result.ok) {
+      setClientStorageMessage(result.message);
+      setClientStorageAvailable(false);
+      return false;
+    }
+    setClients(updatedClients);
+    setClientStorageMessage(`Client ${client.name} deleted.`);
+    return true;
+  }
+
+  function linkInvoiceToClient(invoice: Invoice, client: Client) {
+    if (
+      !window.confirm(
+        `Link invoice ${invoice.invoiceNumber} to ${client.name}? Its saved client details and payment history will not be changed.`
+      )
+    ) {
+      return;
+    }
+    const updatedInvoices = savedInvoices.map((saved) =>
+      saved.id === invoice.id ? { ...saved, clientId: client.id } : saved
+    );
+    const result = writeInvoices(updatedInvoices);
+    if (!result.ok) {
+      setStorageMessage(result.message);
+      return;
+    }
+    setSavedInvoices(updatedInvoices);
+    setStorageMessage(`Invoice ${invoice.invoiceNumber} linked to ${client.name}.`);
+  }
+
+  function selectClient(clientId: string) {
+    if (!clientId) {
+      setSelectedClientId(null);
+      setIsDirty(true);
+      return;
+    }
+    const client = clients.find((saved) => saved.id === clientId);
+    if (!client) return;
+    applyClient(client);
+  }
+
+  function applyClient(client: Client) {
+    setSelectedClientId(client.id);
+    setDraft((current) => ({
+      ...current,
+      client: client.name,
+      clientCompany: client.company,
+      clientEmail: client.email,
+      clientPhone: client.phone,
+      clientAddress: client.billingAddress,
+      clientTaxId: client.taxId,
+    }));
+    setIsDirty(true);
+  }
+
+  function updateClientField(
+    field:
+      | "client"
+      | "clientCompany"
+      | "clientEmail"
+      | "clientPhone"
+      | "clientAddress"
+      | "clientTaxId",
+    value: string
+  ) {
+    setSelectedClientId(null);
+    updateDraft(field, value);
   }
 
   function deleteInvoice(invoice: Invoice) {
@@ -274,6 +426,7 @@ export default function Home() {
     setSavedInvoices(updatedInvoices);
     if (activeInvoiceId === invoice.id) {
       setActiveInvoiceId(null);
+      setSelectedClientId(null);
       setIsDirty(false);
     }
     setStorageMessage(`Invoice ${invoice.invoiceNumber} deleted.`);
@@ -426,7 +579,7 @@ export default function Home() {
             className="flex items-center gap-2"
             aria-label="Workspace actions"
           >
-            {currentView === "editor" ? (
+            {currentView !== "dashboard" && (
               <button
                 type="button"
                 onClick={showDashboard}
@@ -434,7 +587,17 @@ export default function Home() {
               >
                 Dashboard
               </button>
-            ) : (
+            )}
+            {currentView !== "clients" && (
+              <button
+                type="button"
+                onClick={showClients}
+                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              >
+                Clients
+              </button>
+            )}
+            {currentView !== "editor" && (
               <button
                 type="button"
                 onClick={startNewInvoice}
@@ -461,6 +624,18 @@ export default function Home() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
                 A clear view of what you’ve invoiced, what’s been paid, and
                 what needs your attention.
+              </p>
+            </>
+          ) : currentView === "clients" ? (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                InvoiceKit / Workspace
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+                Clients
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                Manage reusable client profiles and review their invoice history.
               </p>
             </>
           ) : (
@@ -494,8 +669,26 @@ export default function Home() {
         </div>
 
         <div
+          data-dashboard-view
+          className={currentView === "clients" ? "" : "hidden"}
+        >
+          <ClientDirectory
+            clients={clients}
+            invoices={savedInvoices}
+            storageReady={clientStorageReady}
+            storageAvailable={clientStorageAvailable}
+            storageMessage={clientStorageMessage}
+            invoiceStorageAvailable={storageReady && storageAvailable}
+            onSaveClient={updateClientProfile}
+            onDeleteClient={deleteClient}
+            onLinkInvoice={linkInvoiceToClient}
+            onOpenInvoice={openInvoice}
+          />
+        </div>
+
+        <div
           className={`invoice-layout grid items-start gap-8 lg:grid-cols-2 ${
-            currentView === "dashboard" ? "hidden" : ""
+            currentView !== "editor" ? "hidden" : ""
           }`}
         >
           <InvoiceEditor
@@ -510,6 +703,10 @@ export default function Home() {
             storageReady={storageReady}
             storageAvailable={storageAvailable}
             storageMessage={storageMessage}
+            clients={clients}
+            clientStorageReady={clientStorageReady}
+            clientStorageAvailable={clientStorageAvailable}
+            selectedClientId={selectedClientId}
             onChange={updateDraft}
             onItemChange={updateItem}
             onAddItem={addItem}
@@ -521,6 +718,10 @@ export default function Home() {
             onDeletePayment={deletePayment}
             onNewInvoice={startNewInvoice}
             onDashboard={showDashboard}
+            onSelectClient={selectClient}
+            onApplyClient={applyClient}
+            onClientFieldChange={updateClientField}
+            onSaveClient={updateClientProfile}
           />
           <InvoicePreview
             invoice={draft}

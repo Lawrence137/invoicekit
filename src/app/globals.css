@@ -48,7 +48,8 @@ textarea {
   }
 
   [data-dashboard-view],
-  [data-view="dashboard"] .invoice-layout {
+  [data-view="dashboard"] .invoice-layout,
+  [data-view="clients"] .invoice-layout {
     display: none !important;
   }
 
@@ -71,6 +72,8 @@ textarea {
     overflow: visible !important;
     color: #0f172a !important;
     background: white !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
 
   .invoice-items {
@@ -82,9 +85,11 @@ textarea {
   }
 
   .invoice-template-modern thead tr {
-    background: white !important;
-    color: #0f172a !important;
+    background: var(--invoice-accent) !important;
+    color: white !important;
     border-bottom: 2px solid #334155 !important;
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
 
   .invoice-template-modern .invoice-totals {

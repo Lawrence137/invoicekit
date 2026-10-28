@@ -104,9 +104,29 @@ function InvoiceDetails({
         <p className="mt-2 break-words font-semibold text-slate-900">
           {invoice.client || "Client name"}
         </p>
+        {invoice.clientCompany && (
+          <p className="mt-1 break-words text-sm text-slate-600">
+            {invoice.clientCompany}
+          </p>
+        )}
         {invoice.clientEmail && (
           <p className="mt-1 break-all text-sm text-slate-600">
             {invoice.clientEmail}
+          </p>
+        )}
+        {invoice.clientPhone && (
+          <p className="mt-1 break-words text-sm text-slate-600">
+            {invoice.clientPhone}
+          </p>
+        )}
+        {invoice.clientAddress && (
+          <p className="mt-1 whitespace-pre-line break-words text-sm text-slate-600">
+            {invoice.clientAddress}
+          </p>
+        )}
+        {invoice.clientTaxId && (
+          <p className="mt-1 break-words text-sm text-slate-600">
+            Tax ID: {invoice.clientTaxId}
           </p>
         )}
       </div>
