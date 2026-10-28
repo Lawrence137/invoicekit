@@ -179,6 +179,13 @@ function isItem(value: unknown): value is Item {
     typeof value.id === "number" &&
     Number.isFinite(value.id) &&
     typeof value.description === "string" &&
+    (value.catalogItemId === undefined ||
+      (typeof value.catalogItemId === "string" &&
+        value.catalogItemId.length > 0)) &&
+    (value.catalogCurrency === undefined ||
+      (typeof value.catalogCurrency === "string" &&
+        ["KES", "USD", "EUR", "GBP"].includes(value.catalogCurrency))) &&
+    (value.unitLabel === undefined || typeof value.unitLabel === "string") &&
     typeof value.quantity === "number" &&
     Number.isFinite(value.quantity) &&
     value.quantity >= 0 &&

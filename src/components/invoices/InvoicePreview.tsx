@@ -212,6 +212,7 @@ function InvoiceItemsTable({
               </td>
               <td className="whitespace-nowrap px-3 py-3.5 text-right tabular-nums text-slate-700">
                 {item.quantity}
+                {item.unitLabel ? ` ${item.unitLabel}` : ""}
               </td>
               <td className="whitespace-nowrap px-3 py-3.5 text-right tabular-nums text-slate-700">
                 {formatCurrency(item.price, currency)}

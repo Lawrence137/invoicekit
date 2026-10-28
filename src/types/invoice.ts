@@ -3,6 +3,9 @@ export type Item = {
   description: string;
   quantity: number;
   price: number;
+  catalogItemId?: string;
+  catalogCurrency?: string;
+  unitLabel?: string;
 };
 
 export type InvoiceTemplate = "classic" | "modern" | "minimal";
@@ -76,4 +79,4 @@ export type DashboardFilter =
   | "paid"
   | "due-soon";
 
-export type InvoiceView = "dashboard" | "editor" | "clients";
+export type InvoiceView = "dashboard" | "editor" | "clients" | "catalog";

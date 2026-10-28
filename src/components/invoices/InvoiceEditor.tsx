@@ -3,6 +3,7 @@
 import InvoicePayments from "@/components/invoices/InvoicePayments";
 import InvoiceCustomization from "@/components/invoices/InvoiceCustomization";
 import ClientFormModal from "@/components/invoices/ClientFormModal";
+import type { CatalogItem } from "@/types/catalog";
 import { formatCurrency, invoiceTotal } from "@/lib/invoice-utils";
 import { useState } from "react";
 import type { Client, ClientProfileDraft } from "@/types/client";
@@ -32,6 +33,9 @@ type InvoiceEditorProps = {
   clientStorageReady: boolean;
   clientStorageAvailable: boolean;
   selectedClientId: string | null;
+  catalogItems: CatalogItem[];
+  catalogReady: boolean;
+  catalogAvailable: boolean;
   onChange: <K extends keyof InvoiceDraft>(
     field: K,
     value: InvoiceDraft[K]
@@ -65,6 +69,7 @@ type InvoiceEditorProps = {
     value: string
   ) => void;
   onSaveClient: (profile: ClientProfileDraft) => Client | null;
+  onSelectCatalogItem: (lineItemId: number, item: CatalogItem) => void;
 };
 
 const inputClass =
@@ -86,6 +91,9 @@ export default function InvoiceEditor({
   clientStorageReady,
   clientStorageAvailable,
   selectedClientId,
+  catalogItems,
+  catalogReady,
+  catalogAvailable,
   onChange,
   onItemChange,
   onAddItem,
@@ -101,9 +109,29 @@ export default function InvoiceEditor({
   onApplyClient,
   onClientFieldChange,
   onSaveClient,
+  onSelectCatalogItem,
 }: InvoiceEditorProps) {
   const financialFieldsLocked = status !== "draft";
   const [saveAsClientOpen, setSaveAsClientOpen] = useState(false);
+  const [catalogSearch, setCatalogSearch] = useState<Record<number, string>>({});
+
+  function changeCurrency(currency: string) {
+    const catalogCurrencyChanges = draft.items.some(
+      (item) =>
+        item.catalogItemId &&
+        item.catalogCurrency &&
+        item.catalogCurrency !== currency
+    );
+    if (
+      catalogCurrencyChanges &&
+      !window.confirm(
+        `Some line-item prices were copied from catalog items priced in a different currency. Changing the invoice to ${currency} will change how those saved amounts are displayed and calculated. Continue?`
+      )
+    ) {
+      return;
+    }
+    onChange("currency", currency);
+  }
 
   return (
     <section className="no-print space-y-6">
@@ -390,7 +418,7 @@ export default function InvoiceEditor({
             Currency
             <select
               value={draft.currency}
-              onChange={(event) => onChange("currency", event.target.value)}
+              onChange={(event) => changeCurrency(event.target.value)}
               disabled={financialFieldsLocked}
               className={`${inputClass} bg-white`}
             >
@@ -489,6 +517,159 @@ export default function InvoiceEditor({
                 >
                   Remove
                 </button>
+              </div>
+
+              <div className="mb-3">
+                <label
+                  htmlFor={`catalog-search-${item.id}`}
+                  className="block text-xs font-medium text-slate-500"
+                >
+                  Add from catalog (optional)
+                </label>
+                <input
+                  id={`catalog-search-${item.id}`}
+                  type="search"
+                  value={catalogSearch[item.id] ?? ""}
+                  disabled={
+                    financialFieldsLocked || !catalogReady || !catalogAvailable
+                  }
+                  onChange={(event) =>
+                    setCatalogSearch((current) => ({
+                      ...current,
+                      [item.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Search active items by name or SKU…"
+                  className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                {(() => {
+                  const search = (catalogSearch[item.id] ?? "")
+                    .trim()
+                    .toLocaleLowerCase();
+                  const options = catalogItems.filter((catalogItem) => {
+                    if (
+                      !catalogItem.active ||
+                      catalogItem.currency !== draft.currency
+                    ) {
+                      return false;
+                    }
+                    return (
+                      !search ||
+                      [
+                        catalogItem.name,
+                        catalogItem.description,
+                        catalogItem.sku,
+                      ].some((value) =>
+                        value.toLocaleLowerCase().includes(search)
+                      )
+                    );
+                  });
+                  const otherCurrencyItems = catalogItems.some(
+                    (catalogItem) =>
+                      catalogItem.active &&
+                      catalogItem.currency !== draft.currency &&
+                      (!search ||
+                        [catalogItem.name, catalogItem.description, catalogItem.sku]
+                          .some((value) =>
+                            value.toLocaleLowerCase().includes(search)
+                          ))
+                  );
+                  const selectedCatalogItem = catalogItems.find(
+                    (catalogItem) => catalogItem.id === item.catalogItemId
+                  );
+
+                  return (
+                    <>
+                      {selectedCatalogItem && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Catalog selection saved as an invoice snapshot.
+                          {!selectedCatalogItem.active
+                            ? " The catalog item is now archived."
+                            : ""}
+                          {item.catalogCurrency &&
+                            item.catalogCurrency !== draft.currency &&
+                            ` Originally priced in ${item.catalogCurrency}; invoice currency is ${draft.currency}.`}
+                        </p>
+                      )}
+                      {search && options.length > 0 && (
+                        <ul
+                          aria-label={`Catalog matches for line item ${item.id}`}
+                          className="mt-2 max-h-48 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200 bg-white"
+                        >
+                          {options.map((catalogItem) => (
+                            <li key={catalogItem.id}>
+                              <button
+                                type="button"
+                                disabled={financialFieldsLocked}
+                                onClick={() => {
+                                  onSelectCatalogItem(item.id, catalogItem);
+                                  setCatalogSearch((current) => ({
+                                    ...current,
+                                    [item.id]: "",
+                                  }));
+                                }}
+                                className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 disabled:cursor-not-allowed"
+                              >
+                                <span className="min-w-0">
+                                  <span className="block truncate font-semibold text-slate-800">
+                                    {catalogItem.name}
+                                    {catalogItem.sku
+                                      ? ` · ${catalogItem.sku}`
+                                      : ""}
+                                  </span>
+                                  {catalogItem.description && (
+                                    <span className="mt-0.5 block truncate text-xs text-slate-500">
+                                      {catalogItem.description}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="shrink-0 font-medium tabular-nums text-slate-700">
+                                  {formatCurrency(
+                                    catalogItem.unitPrice,
+                                    catalogItem.currency
+                                  )}
+                                  {catalogItem.unitLabel
+                                    ? ` / ${catalogItem.unitLabel}`
+                                    : ""}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {search && options.length === 0 && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          {otherCurrencyItems
+                            ? `Matching catalog items use a different currency. Choose ${draft.currency} for this invoice to select them.`
+                            : "No active catalog items match. You can continue with a custom line item."}
+                        </p>
+                      )}
+                      {!catalogReady && (
+                        <p className="mt-2 text-xs text-slate-500" role="status">
+                          Loading catalog…
+                        </p>
+                      )}
+                      {catalogReady && !catalogAvailable && (
+                        <p className="mt-2 text-xs text-amber-700" role="status">
+                          Catalog unavailable. You can enter this line item manually.
+                        </p>
+                      )}
+                      {catalogAvailable &&
+                        catalogReady &&
+                        !catalogItems.some(
+                          (catalogItem) =>
+                            catalogItem.active &&
+                            catalogItem.currency === draft.currency
+                        ) &&
+                        !search && (
+                          <p className="mt-2 text-xs text-slate-500">
+                            No active catalog items in {draft.currency}. Custom
+                            line items are still available.
+                          </p>
+                        )}
+                    </>
+                  );
+                })()}
               </div>
 
               <label className="block text-xs font-medium text-slate-500">

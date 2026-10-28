@@ -3,9 +3,15 @@
 import { useEffect, useState } from "react";
 import InvoiceDashboard from "@/components/invoices/InvoiceDashboard";
 import ClientDirectory from "@/components/invoices/ClientDirectory";
+import CatalogDirectory from "@/components/invoices/CatalogDirectory";
 import InvoiceEditor from "@/components/invoices/InvoiceEditor";
 import InvoicePreview from "@/components/invoices/InvoicePreview";
 import { readInvoices, writeInvoices } from "@/lib/invoice-storage";
+import {
+  createCatalogItemId,
+  readCatalogItems,
+  writeCatalogItems,
+} from "@/lib/catalog-storage";
 import {
   createClientId,
   readClients,
@@ -37,11 +43,13 @@ import type {
   PaymentDraft,
 } from "@/types/invoice";
 import type { Client, ClientProfileDraft } from "@/types/client";
+import type { CatalogItem, CatalogItemDraft } from "@/types/catalog";
 
 export default function Home() {
   const [draft, setDraft] = useState<InvoiceDraft>(createInitialInvoiceDraft);
   const [savedInvoices, setSavedInvoices] = useState<Invoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [activeInvoiceId, setActiveInvoiceId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -51,6 +59,9 @@ export default function Home() {
   const [clientStorageReady, setClientStorageReady] = useState(false);
   const [clientStorageAvailable, setClientStorageAvailable] = useState(true);
   const [clientStorageMessage, setClientStorageMessage] = useState("");
+  const [catalogReady, setCatalogReady] = useState(false);
+  const [catalogAvailable, setCatalogAvailable] = useState(true);
+  const [catalogMessage, setCatalogMessage] = useState("");
   const [currentView, setCurrentView] = useState<InvoiceView>("dashboard");
   const [brandingSettings, setBrandingSettings] =
     useState<InvoiceBrandingSettings>(DEFAULT_BRANDING_SETTINGS);
@@ -61,6 +72,7 @@ export default function Home() {
   useEffect(() => {
     const result = readInvoices();
     const clientResult = readClients();
+    const catalogResult = readCatalogItems();
     const brandingResult = readBrandingSettings();
     const timer = window.setTimeout(() => {
       setDraft((current) => ({ ...current, ...defaultDates() }));
@@ -101,6 +113,16 @@ export default function Home() {
         setClientStorageMessage(clientResult.message);
       }
 
+      if (catalogResult.ok) {
+        setCatalogItems(catalogResult.value);
+        setCatalogAvailable(true);
+        setCatalogMessage("");
+      } else {
+        setCatalogAvailable(false);
+        setCatalogMessage(catalogResult.message);
+      }
+
+      setCatalogReady(true);
       setClientStorageReady(true);
       setStorageReady(true);
       setBrandingReady(true);
@@ -149,12 +171,49 @@ export default function Home() {
       items: [
         ...current.items,
         {
-          id: Date.now(),
+          id: current.items.reduce(
+            (nextId, item) => Math.max(nextId, item.id + 1),
+            Date.now()
+          ),
           description: "",
           quantity: 1,
           price: 0,
         },
       ],
+    }));
+    setIsDirty(true);
+  }
+
+  function selectCatalogItem(lineItemId: number, catalogItem: CatalogItem) {
+    if (!catalogReady || !catalogAvailable) {
+      setCatalogMessage(
+        "Catalog selection is unavailable. Enter this line item manually."
+      );
+      return;
+    }
+    if (!catalogItem.active || catalogItem.currency !== draft.currency) {
+      setStorageMessage(
+        `This catalog item is inactive or priced in ${catalogItem.currency}; it cannot be applied to a ${draft.currency} invoice.`
+      );
+      return;
+    }
+
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.id === lineItemId
+          ? {
+              ...item,
+              description: [catalogItem.name, catalogItem.description]
+                .filter(Boolean)
+                .join("\n"),
+              price: catalogItem.unitPrice,
+              catalogItemId: catalogItem.id,
+              catalogCurrency: catalogItem.currency,
+              unitLabel: catalogItem.unitLabel,
+            }
+          : item
+      ),
     }));
     setIsDirty(true);
   }
@@ -281,6 +340,75 @@ export default function Home() {
   function showClients() {
     if (!saveBeforeSwitch()) return;
     setCurrentView("clients");
+  }
+
+  function showCatalog() {
+    if (!saveBeforeSwitch()) return;
+    setCurrentView("catalog");
+  }
+
+  function saveCatalogItem(
+    draftItem: CatalogItemDraft,
+    itemId?: string
+  ): CatalogItem | null {
+    if (!catalogReady || !catalogAvailable) {
+      setCatalogMessage(
+        "Catalog changes are unavailable because browser storage could not be read."
+      );
+      return null;
+    }
+    const existing = catalogItems.find((item) => item.id === itemId);
+    const now = new Date().toISOString();
+    const catalogItem: CatalogItem = {
+      ...draftItem,
+      id: existing?.id ?? createCatalogItemId(),
+      active: existing?.active ?? true,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const updatedItems = existing
+      ? catalogItems.map((item) =>
+          item.id === existing.id ? catalogItem : item
+        )
+      : [...catalogItems, catalogItem];
+    const result = writeCatalogItems(updatedItems);
+    if (!result.ok) {
+      setCatalogMessage(result.message);
+      setCatalogAvailable(false);
+      return null;
+    }
+
+    setCatalogItems(updatedItems);
+    setCatalogMessage(
+      existing
+        ? `${catalogItem.name} updated. Existing invoice line items are unchanged.`
+        : `${catalogItem.name} added to the catalog.`
+    );
+    return catalogItem;
+  }
+
+  function toggleCatalogItem(item: CatalogItem) {
+    if (!catalogReady || !catalogAvailable) return;
+    const updatedItem: CatalogItem = {
+      ...item,
+      active: !item.active,
+      updatedAt: new Date().toISOString(),
+    };
+    const updatedItems = catalogItems.map((saved) =>
+      saved.id === item.id ? updatedItem : saved
+    );
+    const result = writeCatalogItems(updatedItems);
+    if (!result.ok) {
+      setCatalogMessage(result.message);
+      setCatalogAvailable(false);
+      return;
+    }
+    setCatalogItems(updatedItems);
+    setCatalogMessage(
+      item.active
+        ? `${item.name} archived. Existing invoice line items are unchanged.`
+        : `${item.name} reactivated.`
+    );
   }
 
   function updateClientProfile(
@@ -566,7 +694,7 @@ export default function Home() {
         Skip to main content
       </a>
       <header className="no-print border-b border-slate-200 bg-white">
-        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-0 lg:px-8">
           <button
             type="button"
             onClick={showDashboard}
@@ -576,7 +704,7 @@ export default function Home() {
             Invoice<span className="text-blue-600">Kit</span>
           </button>
           <nav
-            className="flex items-center gap-2"
+            className="flex flex-wrap items-center justify-end gap-1 sm:gap-2"
             aria-label="Workspace actions"
           >
             {currentView !== "dashboard" && (
@@ -595,6 +723,15 @@ export default function Home() {
                 className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
               >
                 Clients
+              </button>
+            )}
+            {currentView !== "catalog" && (
+              <button
+                type="button"
+                onClick={showCatalog}
+                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              >
+                Products &amp; Services
               </button>
             )}
             {currentView !== "editor" && (
@@ -636,6 +773,18 @@ export default function Home() {
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
                 Manage reusable client profiles and review their invoice history.
+              </p>
+            </>
+          ) : currentView === "catalog" ? (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                InvoiceKit / Workspace
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+                Products &amp; Services
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                Manage reusable catalog items and their prices for future invoices.
               </p>
             </>
           ) : (
@@ -687,6 +836,22 @@ export default function Home() {
         </div>
 
         <div
+          data-dashboard-view
+          className={currentView === "catalog" ? "" : "hidden"}
+        >
+          <CatalogDirectory
+            items={catalogItems}
+            invoices={savedInvoices}
+            storageReady={catalogReady}
+            storageAvailable={catalogAvailable}
+            storageMessage={catalogMessage}
+            invoiceStorageAvailable={storageReady && storageAvailable}
+            onSaveItem={saveCatalogItem}
+            onToggleActive={toggleCatalogItem}
+          />
+        </div>
+
+        <div
           className={`invoice-layout grid items-start gap-8 lg:grid-cols-2 ${
             currentView !== "editor" ? "hidden" : ""
           }`}
@@ -707,6 +872,9 @@ export default function Home() {
             clientStorageReady={clientStorageReady}
             clientStorageAvailable={clientStorageAvailable}
             selectedClientId={selectedClientId}
+            catalogItems={catalogItems}
+            catalogReady={catalogReady}
+            catalogAvailable={catalogAvailable}
             onChange={updateDraft}
             onItemChange={updateItem}
             onAddItem={addItem}
@@ -722,6 +890,7 @@ export default function Home() {
             onApplyClient={applyClient}
             onClientFieldChange={updateClientField}
             onSaveClient={updateClientProfile}
+            onSelectCatalogItem={selectCatalogItem}
           />
           <InvoicePreview
             invoice={draft}
