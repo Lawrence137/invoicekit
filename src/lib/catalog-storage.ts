@@ -21,7 +21,7 @@ function isCatalogItemType(value: unknown): value is CatalogItemType {
   return value === "product" || value === "service";
 }
 
-function isCatalogItem(value: unknown): value is CatalogItem {
+export function isCatalogItem(value: unknown): value is CatalogItem {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import InvoiceDashboard from "@/components/invoices/InvoiceDashboard";
 import ClientDirectory from "@/components/invoices/ClientDirectory";
 import CatalogDirectory from "@/components/invoices/CatalogDirectory";
+import BackupRestore from "@/components/invoices/BackupRestore";
 import InvoiceEditor from "@/components/invoices/InvoiceEditor";
 import InvoicePreview from "@/components/invoices/InvoicePreview";
 import { readInvoices, writeInvoices } from "@/lib/invoice-storage";
@@ -44,6 +45,7 @@ import type {
 } from "@/types/invoice";
 import type { Client, ClientProfileDraft } from "@/types/client";
 import type { CatalogItem, CatalogItemDraft } from "@/types/catalog";
+import type { InvoiceKitBackup } from "@/types/backup";
 
 export default function Home() {
   const [draft, setDraft] = useState<InvoiceDraft>(createInitialInvoiceDraft);
@@ -345,6 +347,45 @@ export default function Home() {
   function showCatalog() {
     if (!saveBeforeSwitch()) return;
     setCurrentView("catalog");
+  }
+
+  function showBackup() {
+    if (!saveBeforeSwitch()) return;
+    setCurrentView("backup");
+  }
+
+  function applyWorkspaceBackup(backup: InvoiceKitBackup) {
+    const restoredInvoices = backup.data.invoices;
+    const restoredBranding = backup.data.brandingSettings;
+    setSavedInvoices(restoredInvoices);
+    setClients(backup.data.clients);
+    setCatalogItems(backup.data.catalogItems);
+    setBrandingSettings(restoredBranding);
+    setDraft({
+      ...createInitialInvoiceDraft(),
+      ...defaultDates(),
+      ...restoredBranding.businessProfile,
+      template: restoredBranding.defaultTemplate,
+      client: "",
+      items: [],
+      invoiceNumber: nextInvoiceNumber(restoredInvoices),
+    });
+    setActiveInvoiceId(null);
+    setSelectedClientId(null);
+    setIsDirty(false);
+    setStorageReady(true);
+    setStorageAvailable(true);
+    setStorageMessage("");
+    setClientStorageReady(true);
+    setClientStorageAvailable(true);
+    setClientStorageMessage("");
+    setCatalogReady(true);
+    setCatalogAvailable(true);
+    setCatalogMessage("");
+    setBrandingReady(true);
+    setBrandingAvailable(true);
+    setBrandingMessage("");
+    setCurrentView("dashboard");
   }
 
   function saveCatalogItem(
@@ -734,6 +775,15 @@ export default function Home() {
                 Products &amp; Services
               </button>
             )}
+            {currentView !== "backup" && (
+              <button
+                type="button"
+                onClick={showBackup}
+                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              >
+                Backup &amp; Restore
+              </button>
+            )}
             {currentView !== "editor" && (
               <button
                 type="button"
@@ -785,6 +835,19 @@ export default function Home() {
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
                 Manage reusable catalog items and their prices for future invoices.
+              </p>
+            </>
+          ) : currentView === "backup" ? (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">
+                InvoiceKit / Workspace
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">
+                Backup &amp; Restore
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-base">
+                Protect your local business data and export records for other
+                tools.
               </p>
             </>
           ) : (
@@ -848,6 +911,27 @@ export default function Home() {
             invoiceStorageAvailable={storageReady && storageAvailable}
             onSaveItem={saveCatalogItem}
             onToggleActive={toggleCatalogItem}
+          />
+        </div>
+
+        <div
+          data-dashboard-view
+          className={currentView === "backup" ? "" : "hidden"}
+        >
+          <BackupRestore
+            invoices={savedInvoices}
+            clients={clients}
+            catalogItems={catalogItems}
+            brandingSettings={brandingSettings}
+            storageReady={storageReady}
+            storageAvailable={storageAvailable}
+            clientStorageReady={clientStorageReady}
+            clientStorageAvailable={clientStorageAvailable}
+            catalogReady={catalogReady}
+            catalogAvailable={catalogAvailable}
+            brandingReady={brandingReady}
+            brandingAvailable={brandingAvailable}
+            onRestore={applyWorkspaceBackup}
           />
         </div>
 

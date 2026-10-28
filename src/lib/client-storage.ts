@@ -10,7 +10,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isClient(value: unknown): value is Client {
+export function isClient(value: unknown): value is Client {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&

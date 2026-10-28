@@ -50,7 +50,8 @@ textarea {
   [data-dashboard-view],
   [data-view="dashboard"] .invoice-layout,
   [data-view="clients"] .invoice-layout,
-  [data-view="catalog"] .invoice-layout {
+  [data-view="catalog"] .invoice-layout,
+  [data-view="backup"] .invoice-layout {
     display: none !important;
   }
 

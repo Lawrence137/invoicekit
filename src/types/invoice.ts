@@ -79,4 +79,9 @@ export type DashboardFilter =
   | "paid"
   | "due-soon";
 
-export type InvoiceView = "dashboard" | "editor" | "clients" | "catalog";
+export type InvoiceView =
+  | "dashboard"
+  | "editor"
+  | "clients"
+  | "catalog"
+  | "backup";
