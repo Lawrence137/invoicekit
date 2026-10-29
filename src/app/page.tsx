@@ -343,22 +343,22 @@ export default function Home() {
   }
 
   function showDashboard() {
-    if (!saveBeforeSwitch()) return;
+    if (currentView === "dashboard" || !saveBeforeSwitch()) return;
     setCurrentView("dashboard");
   }
 
   function showClients() {
-    if (!saveBeforeSwitch()) return;
+    if (currentView === "clients" || !saveBeforeSwitch()) return;
     setCurrentView("clients");
   }
 
   function showCatalog() {
-    if (!saveBeforeSwitch()) return;
+    if (currentView === "catalog" || !saveBeforeSwitch()) return;
     setCurrentView("catalog");
   }
 
   function showBackup() {
-    if (!saveBeforeSwitch()) return;
+    if (currentView === "backup" || !saveBeforeSwitch()) return;
     setCurrentView("backup");
   }
 
@@ -831,61 +831,85 @@ export default function Home() {
         Skip to main content
       </a>
       <header className="no-print border-b border-slate-200 bg-white">
-        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-0 lg:px-8">
-          <button
-            type="button"
-            onClick={showDashboard}
-            className="rounded-md text-xl font-bold tracking-tight focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-            aria-label="Go to invoice dashboard"
-          >
-            Invoice<span className="text-blue-600">Kit</span>
-          </button>
-          <nav
-            className="flex flex-wrap items-center justify-end gap-1 sm:gap-2"
-            aria-label="Workspace actions"
-          >
-            {currentView !== "dashboard" && (
-              <button
-                type="button"
-                onClick={showDashboard}
-                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-              >
-                Dashboard
-              </button>
-            )}
-            {currentView !== "clients" && (
-              <button
-                type="button"
-                onClick={showClients}
-                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-              >
-                Clients
-              </button>
-            )}
-            {currentView !== "catalog" && (
-              <button
-                type="button"
-                onClick={showCatalog}
-                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-              >
-                Products &amp; Services
-              </button>
-            )}
-            {currentView !== "backup" && (
-              <button
-                type="button"
-                onClick={showBackup}
-                className="min-h-10 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-              >
-                Backup &amp; Restore
-              </button>
-            )}
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:px-6 md:min-h-16 md:flex-row md:items-center md:justify-between md:gap-4 md:py-0 lg:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={showDashboard}
+              className="rounded-md text-xl font-bold tracking-tight focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+              aria-label="Go to invoice dashboard"
+            >
+              Invoice<span className="text-blue-600">Kit</span>
+            </button>
             {currentView !== "editor" && (
               <button
                 type="button"
                 onClick={startNewInvoice}
                 disabled={!storageReady}
-                className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="min-h-11 shrink-0 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 md:hidden"
+              >
+                New invoice
+              </button>
+            )}
+          </div>
+          <nav
+            className="grid w-full grid-cols-2 gap-1.5 rounded-xl bg-slate-50 p-1.5 md:flex md:w-auto md:items-center md:justify-end md:gap-1 md:rounded-none md:bg-transparent md:p-0"
+            aria-label="Workspace actions"
+          >
+            <button
+              type="button"
+              onClick={showDashboard}
+              aria-current={currentView === "dashboard" ? "page" : undefined}
+              className={`min-h-11 rounded-lg px-2 text-center text-sm font-semibold leading-5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 md:min-h-10 md:px-3 ${
+                currentView === "dashboard"
+                  ? "bg-white text-blue-700 shadow-sm md:bg-blue-50 md:shadow-none"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900 md:hover:bg-slate-100"
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={showClients}
+              aria-current={currentView === "clients" ? "page" : undefined}
+              className={`min-h-11 rounded-lg px-2 text-center text-sm font-semibold leading-5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 md:min-h-10 md:px-3 ${
+                currentView === "clients"
+                  ? "bg-white text-blue-700 shadow-sm md:bg-blue-50 md:shadow-none"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900 md:hover:bg-slate-100"
+              }`}
+            >
+              Clients
+            </button>
+            <button
+              type="button"
+              onClick={showCatalog}
+              aria-current={currentView === "catalog" ? "page" : undefined}
+              className={`min-h-11 rounded-lg px-2 text-center text-sm font-semibold leading-5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 md:min-h-10 md:px-3 ${
+                currentView === "catalog"
+                  ? "bg-white text-blue-700 shadow-sm md:bg-blue-50 md:shadow-none"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900 md:hover:bg-slate-100"
+              }`}
+            >
+              Products &amp; Services
+            </button>
+            <button
+              type="button"
+              onClick={showBackup}
+              aria-current={currentView === "backup" ? "page" : undefined}
+              className={`min-h-11 rounded-lg px-2 text-center text-sm font-semibold leading-5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 md:min-h-10 md:px-3 ${
+                currentView === "backup"
+                  ? "bg-white text-blue-700 shadow-sm md:bg-blue-50 md:shadow-none"
+                  : "text-slate-600 hover:bg-white hover:text-slate-900 md:hover:bg-slate-100"
+              }`}
+            >
+              Backup &amp; Restore
+            </button>
+            {currentView !== "editor" && (
+              <button
+                type="button"
+                onClick={startNewInvoice}
+                disabled={!storageReady}
+                className="hidden min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 md:block"
               >
                 New invoice
               </button>
