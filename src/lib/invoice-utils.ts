@@ -2,6 +2,7 @@ import type {
   Invoice,
   InvoiceDisplayStatus,
   InvoiceDraft,
+  InvoiceFollowUp,
   InvoiceTemplate,
   Item,
   Payment,
@@ -14,6 +15,21 @@ export function dateInputValue(date: Date) {
     String(date.getUTCMonth() + 1).padStart(2, "0"),
     String(date.getUTCDate()).padStart(2, "0"),
   ].join("-");
+}
+
+export function localCalendarDateValue(date = new Date()) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+export function calendarDaysBetween(startDate: string, endDate: string) {
+  if (!isValidIsoDate(startDate) || !isValidIsoDate(endDate)) return 0;
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+  return Math.round((end - start) / 86_400_000);
 }
 
 export function formatInvoiceDate(value: string) {
@@ -103,6 +119,37 @@ export function outstandingBalance(invoice: Invoice) {
   return roundCurrency(Math.max(0, invoiceTotal(invoice) - totalPaid(invoice.payments)));
 }
 
+export type PaymentFollowUpState =
+  | { kind: "overdue"; daysOverdue: number }
+  | { kind: "due-today" }
+  | { kind: "due-soon"; daysUntilDue: number }
+  | { kind: "none" };
+
+export function getPaymentFollowUpState(
+  invoice: Invoice,
+  today = localCalendarDateValue(),
+  dueSoonDays = 7
+): PaymentFollowUpState {
+  if (
+    !isValidIsoDate(today) ||
+    invoice.status !== "sent" ||
+    outstandingBalance(invoice) <= 0 ||
+    !isValidIsoDate(invoice.dueDate)
+  ) {
+    return { kind: "none" };
+  }
+
+  const daysUntilDue = calendarDaysBetween(today, invoice.dueDate);
+  if (daysUntilDue < 0) {
+    return { kind: "overdue", daysOverdue: Math.abs(daysUntilDue) };
+  }
+  if (daysUntilDue === 0) return { kind: "due-today" };
+  if (daysUntilDue <= dueSoonDays) {
+    return { kind: "due-soon", daysUntilDue };
+  }
+  return { kind: "none" };
+}
+
 export function paymentProgress(invoice: Invoice) {
   const total = invoiceTotal(invoice);
   if (total <= 0) return invoice.status === "paid" ? 100 : 0;
@@ -111,17 +158,12 @@ export function paymentProgress(invoice: Invoice) {
 
 export function getInvoiceDisplayStatus(
   invoice: Invoice,
-  today = dateInputValue(new Date())
+  today = localCalendarDateValue()
 ): InvoiceDisplayStatus {
   if (outstandingBalance(invoice) === 0 && invoice.status === "paid") {
     return "paid";
   }
-  if (
-    invoice.status === "sent" &&
-    invoice.dueDate &&
-    invoice.dueDate < today &&
-    outstandingBalance(invoice) > 0
-  ) {
+  if (getPaymentFollowUpState(invoice, today).kind === "overdue") {
     return "overdue";
   }
   return invoice.status;
@@ -210,6 +252,23 @@ function isPayment(value: unknown): value is Payment {
   );
 }
 
+function isInvoiceFollowUp(value: unknown): value is InvoiceFollowUp {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    value.id.trim().length > 0 &&
+    typeof value.sentAt === "string" &&
+    !Number.isNaN(Date.parse(value.sentAt)) &&
+    new Date(value.sentAt).toISOString() === value.sentAt &&
+    ["upcoming", "overdue", "final"].includes(String(value.type)) &&
+    typeof value.message === "string" &&
+    value.message.trim().length > 0 &&
+    (value.channel === undefined ||
+      ["email", "whatsapp", "other"].includes(String(value.channel))) &&
+    (value.notes === undefined || typeof value.notes === "string")
+  );
+}
+
 export function isInvoice(value: unknown): value is Invoice {
   if (!isRecord(value)) return false;
 
@@ -239,7 +298,8 @@ export function isInvoice(value: unknown): value is Invoice {
     typeof value.paymentTerms !== "string" ||
     !isInvoiceTemplate(value.template) ||
     !Array.isArray(value.items) ||
-    !Array.isArray(value.payments)
+    !Array.isArray(value.payments) ||
+    (value.followUps !== undefined && !Array.isArray(value.followUps))
   ) {
     return false;
   }
@@ -255,7 +315,11 @@ export function isInvoice(value: unknown): value is Invoice {
       value.status !== "sent" &&
       value.status !== "paid") ||
     !value.items.every(isItem) ||
-    !value.payments.every(isPayment)
+    !value.payments.every(isPayment) ||
+    (value.followUps !== undefined &&
+      (!value.followUps.every(isInvoiceFollowUp) ||
+        new Set(value.followUps.map((followUp) => followUp.id)).size !==
+          value.followUps.length))
   ) {
     return false;
   }
@@ -283,6 +347,7 @@ export function normalizeInvoice(value: unknown): Invoice | null {
   const normalized = {
     ...value,
     payments: value.payments === undefined ? [] : value.payments,
+    followUps: value.followUps === undefined ? [] : value.followUps,
     businessAddress:
       value.businessAddress === undefined ? "" : value.businessAddress,
     businessPhone:

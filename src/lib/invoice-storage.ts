@@ -46,6 +46,7 @@ export function readInvoices(): InvoiceReadResult {
       if (typeof invoice !== "object" || invoice === null) return false;
       return (
         !("payments" in invoice) ||
+        !("followUps" in invoice) ||
         !("businessAddress" in invoice) ||
         !("businessPhone" in invoice) ||
         !("businessWebsite" in invoice) ||

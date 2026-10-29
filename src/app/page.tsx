@@ -7,6 +7,7 @@ import CatalogDirectory from "@/components/invoices/CatalogDirectory";
 import BackupRestore from "@/components/invoices/BackupRestore";
 import InvoiceEditor from "@/components/invoices/InvoiceEditor";
 import InvoicePreview from "@/components/invoices/InvoicePreview";
+import PaymentReminderModal from "@/components/invoices/PaymentReminderModal";
 import { readInvoices, writeInvoices } from "@/lib/invoice-storage";
 import {
   createCatalogItemId,
@@ -38,10 +39,13 @@ import type {
   Invoice,
   InvoiceBrandingSettings,
   InvoiceDraft,
+  InvoiceFollowUp,
   InvoiceView,
   Item,
   Payment,
   PaymentDraft,
+  PaymentReminderType,
+  ReminderChannel,
 } from "@/types/invoice";
 import type { Client, ClientProfileDraft } from "@/types/client";
 import type { CatalogItem, CatalogItemDraft } from "@/types/catalog";
@@ -70,6 +74,9 @@ export default function Home() {
   const [brandingReady, setBrandingReady] = useState(false);
   const [brandingAvailable, setBrandingAvailable] = useState(true);
   const [brandingMessage, setBrandingMessage] = useState("");
+  const [reminderInvoiceId, setReminderInvoiceId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     const result = readInvoices();
@@ -246,6 +253,7 @@ export default function Home() {
       items: draft.items.map((item) => ({ ...item })),
       status: existing?.status ?? "draft",
       payments: existing?.payments ?? [],
+      followUps: existing?.followUps ?? [],
     };
     if (
       savedInvoices.some(
@@ -619,6 +627,91 @@ export default function Home() {
     return true;
   }
 
+  function openPaymentReminder(invoice: Invoice) {
+    const saved = savedInvoices.find((item) => item.id === invoice.id);
+    if (
+      !saved ||
+      saved.status !== "sent" ||
+      outstandingBalance(saved) <= 0 ||
+      !storageAvailable
+    ) {
+      setStorageMessage(
+        "A reminder is available only for a saved sent invoice with an outstanding balance."
+      );
+      return;
+    }
+    setReminderInvoiceId(saved.id);
+  }
+
+  function recordFollowUp(
+    invoiceId: string,
+    entry: {
+      type: PaymentReminderType;
+      message: string;
+      channel?: ReminderChannel;
+      notes?: string;
+    }
+  ) {
+    if (!storageReady || !storageAvailable) {
+      return "Reminder history could not be saved because invoice storage is unavailable.";
+    }
+    const invoice = savedInvoices.find((saved) => saved.id === invoiceId);
+    if (!invoice || invoice.status !== "sent") {
+      return "This invoice is no longer available as a sent invoice. Reload and try again.";
+    }
+    if (outstandingBalance(invoice) <= 0) {
+      return "This invoice has no remaining balance, so a reminder was not recorded.";
+    }
+    if (!entry.message.trim()) {
+      return "Enter a reminder message before recording it as sent.";
+    }
+
+    const followUp: InvoiceFollowUp = {
+      id: createInvoiceId(),
+      sentAt: new Date().toISOString(),
+      type: entry.type,
+      message: entry.message,
+      ...(entry.channel ? { channel: entry.channel } : {}),
+      ...(entry.notes ? { notes: entry.notes } : {}),
+    };
+    const updatedInvoice: Invoice = {
+      ...invoice,
+      followUps: [...invoice.followUps, followUp],
+    };
+    if (!updatePersistedInvoice(updatedInvoice)) {
+      return "Reminder history could not be written to browser storage.";
+    }
+    setStorageMessage(
+      `Follow-up recorded for invoice ${invoice.invoiceNumber}. Invoice status and payments were not changed.`
+    );
+    return null;
+  }
+
+  function deleteFollowUp(invoice: Invoice, followUp: InvoiceFollowUp) {
+    if (
+      !window.confirm(
+        `Delete this reminder history record for invoice ${invoice.invoiceNumber}? The invoice and its payments will not be changed.`
+      )
+    ) {
+      return;
+    }
+    const currentInvoice = savedInvoices.find(
+      (saved) => saved.id === invoice.id
+    );
+    if (!currentInvoice) return;
+    const updatedInvoice: Invoice = {
+      ...currentInvoice,
+      followUps: currentInvoice.followUps.filter(
+        (saved) => saved.id !== followUp.id
+      ),
+    };
+    if (updatePersistedInvoice(updatedInvoice)) {
+      setStorageMessage(
+        `Reminder history record deleted from invoice ${invoice.invoiceNumber}.`
+      );
+    }
+  }
+
   function markInvoiceSent() {
     if (!storageAvailable) return;
     if (!window.confirm("Mark this invoice as sent? Its financial details will be locked.")) {
@@ -721,6 +814,9 @@ export default function Home() {
   const activeBalance = activeInvoice
     ? outstandingBalance(activeInvoice)
     : invoiceTotal(draft);
+  const reminderInvoice = savedInvoices.find(
+    (invoice) => invoice.id === reminderInvoiceId
+  );
 
   return (
     <main
@@ -876,6 +972,7 @@ export default function Home() {
             storageMessage={storageMessage}
             onNewInvoice={startNewInvoice}
             onOpenInvoice={openInvoice}
+            onCreateReminder={openPaymentReminder}
             onDeleteInvoice={deleteInvoice}
           />
         </div>
@@ -944,6 +1041,7 @@ export default function Home() {
             draft={draft}
             status={activeStatus}
             payments={activeInvoice?.payments ?? []}
+            savedInvoice={activeInvoice ?? null}
             balance={activeBalance}
             brandingSettings={brandingSettings}
             brandingReady={brandingReady}
@@ -968,6 +1066,8 @@ export default function Home() {
             onMarkSent={markInvoiceSent}
             onSavePayment={savePayment}
             onDeletePayment={deletePayment}
+            onCreateReminder={openPaymentReminder}
+            onDeleteFollowUp={deleteFollowUp}
             onNewInvoice={startNewInvoice}
             onDashboard={showDashboard}
             onSelectClient={selectClient}
@@ -986,6 +1086,17 @@ export default function Home() {
             balance={activeBalance}
           />
         </div>
+
+        {reminderInvoice && reminderInvoice.status === "sent" && (
+          <PaymentReminderModal
+            key={reminderInvoice.id}
+            invoice={reminderInvoice}
+            onClose={() => setReminderInvoiceId(null)}
+            onRecordSent={(entry) =>
+              recordFollowUp(reminderInvoice.id, entry)
+            }
+          />
+        )}
 
         <footer className="no-print mt-8 border-t border-slate-200/80 py-6 text-center text-xs text-slate-400">
           InvoiceKit · Simple invoicing, done right.

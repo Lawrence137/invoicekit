@@ -6,7 +6,9 @@ import {
   formatCurrency,
   formatInvoiceDate,
   getInvoiceDisplayStatus,
+  getPaymentFollowUpState,
   invoiceTotal,
+  localCalendarDateValue,
   outstandingBalance,
   paymentProgress,
   totalPaid,
@@ -20,6 +22,7 @@ type InvoiceDashboardProps = {
   storageMessage: string;
   onNewInvoice: () => void;
   onOpenInvoice: (invoice: Invoice) => void;
+  onCreateReminder: (invoice: Invoice) => void;
   onDeleteInvoice: (invoice: Invoice) => void;
 };
 
@@ -98,14 +101,37 @@ export default function InvoiceDashboard({
   storageMessage,
   onNewInvoice,
   onOpenInvoice,
+  onCreateReminder,
   onDeleteInvoice,
 }: InvoiceDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filter, setFilter] = useState<DashboardFilter>("all");
-  const today = dateInputValue(new Date());
+  const today = localCalendarDateValue();
   const dueSoonLimit = new Date(`${today}T00:00:00Z`);
   dueSoonLimit.setUTCDate(dueSoonLimit.getUTCDate() + 7);
   const dueWithinSevenDays = dateInputValue(dueSoonLimit);
+  const followUpInvoices = invoices
+    .flatMap((invoice) => {
+      const state = getPaymentFollowUpState(invoice, today);
+      return state.kind === "none" ? [] : [{ invoice, state }];
+    })
+    .sort((a, b) => a.invoice.dueDate.localeCompare(b.invoice.dueDate));
+  const overdueByCurrency = followUpInvoices.reduce<Record<string, number>>(
+    (totals, { invoice, state }) => {
+      if (state.kind === "overdue") {
+        totals[invoice.currency] =
+          (totals[invoice.currency] ?? 0) + outstandingBalance(invoice);
+      }
+      return totals;
+    },
+    {}
+  );
+  const dueTodayCount = followUpInvoices.filter(
+    ({ state }) => state.kind === "due-today"
+  ).length;
+  const dueSoonCount = followUpInvoices.filter(
+    ({ state }) => state.kind === "due-soon"
+  ).length;
 
   const counts = invoices.reduce(
     (result, invoice) => {
@@ -223,6 +249,151 @@ export default function InvoiceDashboard({
           </p>
         </article>
       </div>
+
+      <section
+        aria-labelledby="payment-follow-up-heading"
+        className="overflow-hidden rounded-xl border border-slate-200 bg-white"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+          <div>
+            <h2
+              id="payment-follow-up-heading"
+              className="text-base font-semibold text-slate-900"
+            >
+              Payment follow-up
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Sent invoices with a balance due today, within 7 days, or overdue.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            {Object.entries(overdueByCurrency).map(([currency, amount]) => (
+              <span
+                key={currency}
+                className="rounded-full bg-rose-50 px-3 py-1.5 font-semibold text-rose-800"
+              >
+                Overdue {formatCurrency(amount, currency)}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
+          <div className="px-5 py-3 sm:px-6">
+            <p className="text-xs text-slate-500">Overdue</p>
+            <p className="mt-1 font-semibold tabular-nums text-rose-700">
+              {storageReady && storageAvailable
+                ? followUpInvoices.filter(({ state }) => state.kind === "overdue")
+                    .length
+                : "—"}
+            </p>
+          </div>
+          <div className="px-5 py-3 sm:px-6">
+            <p className="text-xs text-slate-500">Due today</p>
+            <p className="mt-1 font-semibold tabular-nums text-slate-900">
+              {storageReady && storageAvailable ? dueTodayCount : "—"}
+            </p>
+          </div>
+          <div className="px-5 py-3 sm:px-6">
+            <p className="text-xs text-slate-500">Due in 7 days</p>
+            <p className="mt-1 font-semibold tabular-nums text-slate-900">
+              {storageReady && storageAvailable ? dueSoonCount : "—"}
+            </p>
+          </div>
+        </div>
+        {!storageReady ? (
+          <p className="p-5 text-sm text-slate-500" role="status">
+            Loading follow-up data…
+          </p>
+        ) : !storageAvailable ? (
+          <p className="p-5 text-sm text-amber-800" role="alert">
+            Follow-up data is unavailable until saved invoices can be read.
+          </p>
+        ) : followUpInvoices.length === 0 ? (
+          <p className="p-5 text-sm text-slate-500">
+            Nothing needs follow-up right now. Sent invoices with outstanding
+            balances will appear here as their due dates approach.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {followUpInvoices.map(({ invoice, state }) => (
+              <li
+                key={invoice.id}
+                className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onOpenInvoice(invoice)}
+                      className="font-semibold text-slate-900 hover:text-blue-700 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                      {invoice.invoiceNumber}
+                    </button>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        state.kind === "overdue"
+                          ? "bg-rose-50 text-rose-700"
+                          : state.kind === "due-today"
+                            ? "bg-amber-50 text-amber-800"
+                            : "bg-blue-50 text-blue-700"
+                      }`}
+                    >
+                      {state.kind === "overdue"
+                        ? `Overdue · ${state.daysOverdue} ${
+                            state.daysOverdue === 1 ? "day" : "days"
+                          }`
+                        : state.kind === "due-today"
+                          ? "Due today"
+                          : `Due in ${state.daysUntilDue} ${
+                              state.daysUntilDue === 1 ? "day" : "days"
+                            }`}
+                    </span>
+                  </div>
+                  <p className="mt-1 truncate text-sm text-slate-600">
+                    {invoice.client || "Client name"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Due {formatInvoiceDate(invoice.dueDate)}
+                    {invoice.followUps.length > 0 &&
+                      ` · Last follow-up ${new Date(
+                        invoice.followUps.reduce((latest, item) =>
+                          item.sentAt > latest.sentAt ? item : latest
+                        ).sentAt
+                      ).toLocaleDateString()}`}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <p className="mr-auto whitespace-nowrap text-sm font-semibold tabular-nums text-slate-900 sm:mr-2">
+                    {formatCurrency(
+                      outstandingBalance(invoice),
+                      invoice.currency
+                    )}
+                    <span className="ml-1 text-xs font-normal text-slate-500">
+                      due
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onOpenInvoice(invoice)}
+                    className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCreateReminder(invoice)}
+                    disabled={outstandingBalance(invoice) <= 0}
+                    aria-label={`Create payment reminder for ${invoice.invoiceNumber}`}
+                    className="min-h-10 rounded-lg bg-blue-700 px-3 text-sm font-semibold text-white hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Create reminder
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section
         aria-labelledby="invoice-list-heading"

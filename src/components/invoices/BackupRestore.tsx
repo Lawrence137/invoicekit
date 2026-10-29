@@ -7,6 +7,7 @@ import {
   createWorkspaceBackup,
   exportCatalogCsv,
   exportClientsCsv,
+  exportFollowUpsCsv,
   exportInvoicesCsv,
   exportPaymentsCsv,
   MAX_BACKUP_FILE_BYTES,
@@ -206,10 +207,10 @@ export default function BackupRestore({
             Full workspace backup
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Download a versioned JSON copy of invoices and payment history,
-            client profiles, products and services, invoice templates, brand
-            colors, and any stored logo. The file is created in this browser
-            and is never uploaded.
+            Download a versioned JSON copy of invoices, payments and sent
+            reminder history, client profiles, products and services, invoice
+            templates, brand colors, and any stored logo. The file is created
+            in this browser and is never uploaded.
           </p>
           <button
             type="button"
@@ -263,6 +264,7 @@ export default function BackupRestore({
               {[
                 ["Invoices", summary.invoiceCount],
                 ["Payments", summary.paymentCount],
+                ["Sent reminders", summary.followUpCount],
                 ["Clients", summary.clientCount],
                 ["Catalog items", summary.catalogItemCount],
                 ["Logo", summary.logoIncluded ? "Included" : "Not included"],
@@ -354,6 +356,11 @@ export default function BackupRestore({
               label: "Payments CSV",
               filename: `invoicekit-payments-${date}.csv`,
               createCsv: () => exportPaymentsCsv(invoices),
+            },
+            {
+              label: "Reminder history CSV",
+              filename: `invoicekit-reminders-${date}.csv`,
+              createCsv: () => exportFollowUpsCsv(invoices),
             },
           ].map(({ label, filename, createCsv }) => (
             <button

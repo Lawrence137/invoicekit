@@ -69,6 +69,10 @@ function summarize(backup: InvoiceKitBackup): BackupSummary {
       (count, invoice) => count + invoice.payments.length,
       0
     ),
+    followUpCount: backup.data.invoices.reduce(
+      (count, invoice) => count + invoice.followUps.length,
+      0
+    ),
     logoIncluded: backup.data.brandingSettings.logoDataUrl !== null,
   };
 }
@@ -187,7 +191,10 @@ export function validateWorkspaceBackup(
     };
   }
 
-  const invoices = data.invoices as Invoice[];
+  const invoices = (data.invoices as Invoice[]).map((invoice) => ({
+    ...invoice,
+    followUps: invoice.followUps ?? [],
+  }));
   const clients = data.clients as Client[];
   const catalogItems = data.catalogItems as CatalogItem[];
   const duplicateInvoices = validateUniqueIds(invoices, "invoice");
@@ -245,6 +252,18 @@ export function validateWorkspaceBackup(
       ok: false,
       message:
         "Backup contains an invalid or duplicate line-item ID within an invoice.",
+    };
+  }
+  const followUpIds = invoices.flatMap((invoice) =>
+    invoice.followUps.map((followUp) => followUp.id)
+  );
+  if (
+    followUpIds.some((id) => !id.trim()) ||
+    new Set(followUpIds).size !== followUpIds.length
+  ) {
+    return {
+      ok: false,
+      message: "Backup contains a missing or duplicate follow-up ID.",
     };
   }
 
@@ -510,6 +529,35 @@ export function exportPaymentsCsv(invoices: Invoice[]) {
         invoice.currency,
         payment.method ?? "",
         payment.reference ?? "",
+      ])
+    )
+  );
+}
+
+export function exportFollowUpsCsv(invoices: Invoice[]) {
+  return csvDocument(
+    [
+      "invoice_id",
+      "invoice_number",
+      "client",
+      "reminder_id",
+      "sent_at",
+      "reminder_type",
+      "channel",
+      "message",
+      "notes",
+    ],
+    invoices.flatMap((invoice) =>
+      invoice.followUps.map((followUp) => [
+        invoice.id,
+        invoice.invoiceNumber,
+        invoice.client,
+        followUp.id,
+        followUp.sentAt,
+        followUp.type,
+        followUp.channel ?? "",
+        followUp.message,
+        followUp.notes ?? "",
       ])
     )
   );

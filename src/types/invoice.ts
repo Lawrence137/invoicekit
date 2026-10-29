@@ -61,6 +61,18 @@ export type Payment = {
 };
 
 export type PaymentDraft = Omit<Payment, "id">;
+export type PaymentReminderType = "upcoming" | "overdue" | "final";
+export type ReminderChannel = "email" | "whatsapp" | "other";
+
+export type InvoiceFollowUp = {
+  id: string;
+  sentAt: string;
+  type: PaymentReminderType;
+  message: string;
+  channel?: ReminderChannel;
+  notes?: string;
+};
+
 export type InvoiceLifecycleStatus = "draft" | "sent" | "paid";
 export type InvoiceDisplayStatus = InvoiceLifecycleStatus | "overdue";
 
@@ -69,6 +81,7 @@ export type Invoice = InvoiceDraft & {
   clientId?: string;
   status: InvoiceLifecycleStatus;
   payments: Payment[];
+  followUps: InvoiceFollowUp[];
 };
 
 export type DashboardFilter =

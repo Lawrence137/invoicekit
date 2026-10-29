@@ -1,6 +1,7 @@
 "use client";
 
 import InvoicePayments from "@/components/invoices/InvoicePayments";
+import InvoiceFollowUpHistory from "@/components/invoices/InvoiceFollowUpHistory";
 import InvoiceCustomization from "@/components/invoices/InvoiceCustomization";
 import ClientFormModal from "@/components/invoices/ClientFormModal";
 import type { CatalogItem } from "@/types/catalog";
@@ -11,6 +12,8 @@ import type {
   InvoiceBrandingSettings,
   InvoiceDisplayStatus,
   InvoiceDraft,
+  Invoice,
+  InvoiceFollowUp,
   InvoiceTemplate,
   Item,
   Payment,
@@ -21,6 +24,7 @@ type InvoiceEditorProps = {
   draft: InvoiceDraft;
   status: InvoiceDisplayStatus;
   payments: Payment[];
+  savedInvoice: Invoice | null;
   balance: number;
   brandingSettings: InvoiceBrandingSettings;
   brandingReady: boolean;
@@ -54,6 +58,8 @@ type InvoiceEditorProps = {
   onMarkSent: () => void;
   onSavePayment: (payment: PaymentDraft, paymentId?: string) => string | null;
   onDeletePayment: (payment: Payment) => void;
+  onCreateReminder: (invoice: Invoice) => void;
+  onDeleteFollowUp: (invoice: Invoice, followUp: InvoiceFollowUp) => void;
   onNewInvoice: () => void;
   onDashboard: () => void;
   onSelectClient: (clientId: string) => void;
@@ -79,6 +85,7 @@ export default function InvoiceEditor({
   draft,
   status,
   payments,
+  savedInvoice,
   balance,
   brandingSettings,
   brandingReady,
@@ -103,6 +110,8 @@ export default function InvoiceEditor({
   onMarkSent,
   onSavePayment,
   onDeletePayment,
+  onCreateReminder,
+  onDeleteFollowUp,
   onNewInvoice,
   onDashboard,
   onSelectClient,
@@ -799,6 +808,15 @@ export default function InvoiceEditor({
           storageAvailable={storageAvailable}
           onSavePayment={onSavePayment}
           onDeletePayment={onDeletePayment}
+        />
+      )}
+      {savedInvoice && (
+        <InvoiceFollowUpHistory
+          invoice={savedInvoice}
+          balance={balance}
+          storageAvailable={storageAvailable}
+          onCreateReminder={onCreateReminder}
+          onDeleteFollowUp={onDeleteFollowUp}
         />
       )}
     </section>

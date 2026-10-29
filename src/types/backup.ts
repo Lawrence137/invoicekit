@@ -22,5 +22,6 @@ export type BackupSummary = {
   clientCount: number;
   catalogItemCount: number;
   paymentCount: number;
+  followUpCount: number;
   logoIncluded: boolean;
 };
