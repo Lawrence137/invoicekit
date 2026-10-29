@@ -8,8 +8,19 @@ import {
 } from "@/lib/invoice-utils";
 import type {
   Invoice,
+  InvoiceFollowUp,
   PaymentReminderType,
 } from "@/types/invoice";
+
+export function appendInvoiceFollowUp(
+  invoice: Invoice,
+  followUp: InvoiceFollowUp
+): Invoice {
+  return {
+    ...invoice,
+    followUps: [...invoice.followUps, followUp],
+  };
+}
 
 export function getDefaultReminderType(
   invoice: Invoice,

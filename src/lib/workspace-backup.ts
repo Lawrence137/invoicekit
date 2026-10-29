@@ -300,17 +300,23 @@ export function restoreWorkspaceBackup(
   const validated = validateWorkspaceBackup(backup);
   if (!validated.ok) return validated;
 
+  const normalizedBackup = validated.backup;
   const nextValues = new Map<string, string>([
-    [INVOICE_STORAGE_KEY, JSON.stringify(backup.data.invoices)],
-    [CLIENT_STORAGE_KEY, JSON.stringify(backup.data.clients)],
-    [CATALOG_STORAGE_KEY, JSON.stringify(backup.data.catalogItems)],
-    [BRANDING_STORAGE_KEY, JSON.stringify(backup.data.brandingSettings)],
+    [INVOICE_STORAGE_KEY, JSON.stringify(normalizedBackup.data.invoices)],
+    [CLIENT_STORAGE_KEY, JSON.stringify(normalizedBackup.data.clients)],
+    [CATALOG_STORAGE_KEY, JSON.stringify(normalizedBackup.data.catalogItems)],
+    [
+      BRANDING_STORAGE_KEY,
+      JSON.stringify(normalizedBackup.data.brandingSettings),
+    ],
   ]);
   const previousValues = new Map<string, string | null>();
+  let storage: Storage;
 
   try {
+    storage = window.localStorage;
     for (const key of WORKSPACE_KEYS) {
-      previousValues.set(key, window.localStorage.getItem(key));
+      previousValues.set(key, storage.getItem(key));
     }
   } catch {
     return {
@@ -320,23 +326,25 @@ export function restoreWorkspaceBackup(
     };
   }
 
+  const attemptedKeys: string[] = [];
   try {
     for (const key of WORKSPACE_KEYS) {
       const value = nextValues.get(key);
       if (value === undefined) {
         throw new Error("A required backup dataset was missing.");
       }
-      window.localStorage.setItem(key, value);
+      attemptedKeys.push(key);
+      storage.setItem(key, value);
     }
   } catch {
     let rollbackSucceeded = true;
-    for (const key of [...WORKSPACE_KEYS].reverse()) {
+    for (const key of attemptedKeys.reverse()) {
       try {
         const previousValue = previousValues.get(key);
         if (previousValue === null || previousValue === undefined) {
-          window.localStorage.removeItem(key);
+          storage.removeItem(key);
         } else {
-          window.localStorage.setItem(key, previousValue);
+          storage.setItem(key, previousValue);
         }
       } catch {
         rollbackSucceeded = false;
@@ -352,8 +360,7 @@ export function restoreWorkspaceBackup(
 
   return {
     ok: true,
-    message:
-      "Workspace restored successfully.",
+    message: "Workspace restored successfully.",
   };
 }
 

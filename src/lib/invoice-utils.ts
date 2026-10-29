@@ -43,11 +43,11 @@ export function formatInvoiceDate(value: string) {
 export function defaultDates() {
   const issueDate = new Date();
   const dueDate = new Date(issueDate);
-  dueDate.setUTCDate(dueDate.getUTCDate() + 30);
+  dueDate.setDate(dueDate.getDate() + 30);
 
   return {
-    issueDate: dateInputValue(issueDate),
-    dueDate: dateInputValue(dueDate),
+    issueDate: localCalendarDateValue(issueDate),
+    dueDate: localCalendarDateValue(dueDate),
   };
 }
 

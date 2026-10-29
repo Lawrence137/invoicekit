@@ -35,6 +35,7 @@ import {
   totalPaid,
   validatePayment,
 } from "@/lib/invoice-utils";
+import { appendInvoiceFollowUp } from "@/lib/payment-reminders";
 import type {
   Invoice,
   InvoiceBrandingSettings,
@@ -674,10 +675,7 @@ export default function Home() {
       ...(entry.channel ? { channel: entry.channel } : {}),
       ...(entry.notes ? { notes: entry.notes } : {}),
     };
-    const updatedInvoice: Invoice = {
-      ...invoice,
-      followUps: [...invoice.followUps, followUp],
-    };
+    const updatedInvoice = appendInvoiceFollowUp(invoice, followUp);
     if (!updatePersistedInvoice(updatedInvoice)) {
       return "Reminder history could not be written to browser storage.";
     }
